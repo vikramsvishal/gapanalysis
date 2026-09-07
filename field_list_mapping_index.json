@@ -1,0 +1,444 @@
+{
+    "schema_version": "1.0",
+    "source_file": "Field List and Mapping.xlsx",
+    "source_reference": "turn36search3",
+    "generated_for": "Unified Network and Server Catalog Reconciliation GUI",
+    "normalization": {
+        "header_key_rule": "lowercase; trim; remove spaces, underscores, hyphens, periods, slashes, backslashes and other non-alphanumeric characters",
+        "serial_key_rule": "lowercase; trim; remove spaces, hyphens, underscores, periods, forward slashes and backslashes",
+        "catalog_value_rule": "required manufacturer, hardware_type, hardware_model and subcategory values must come from the applicable product catalog",
+        "date_output_format": "mm/dd/yyyy",
+        "date_sentinels": {
+            "31-12-2099": "DATE_NOT_PUBLISHED",
+            "2099-12-31": "DATE_NOT_PUBLISHED",
+            "31-12-1999": "LEGACY_PLACEHOLDER_REVIEW"
+        }
+    },
+    "reports": {
+        "is_operating_system": {
+            "display_name": "IS Operating System Report",
+            "key_fields": [
+                "fully_qualified_hostname",
+                "hostname",
+                "domain_name",
+                "os_lifecycle_status",
+                "operating_system_name",
+                "operating_system_provider",
+                "operating_system_version",
+                "operating_system_technology_level",
+                "os_parent_opaque_id",
+                "os_parent_category",
+                "os_parent_serial_number",
+                "os_parent_manufacturer",
+                "os_parent_hardware_type",
+                "os_parent_hardware_model"
+            ]
+        },
+        "nw_cmdb": {
+            "display_name": "NW CMDB Report",
+            "key_fields": [
+                "Asset Primary Key",
+                "CI.Name",
+                "Configuration Item",
+                "Class",
+                "Category",
+                "Subcategory",
+                "Life Cycle Stage",
+                "Life Cycle Stage Status",
+                "Manufacturer",
+                "Model ID",
+                "Model.Name",
+                "Model number",
+                "Serial number",
+                "IP Address",
+                "Firmware version",
+                "Due",
+                "Fully qualified domain name",
+                "HW_End_Of_Support_Date",
+                "HW_End_Of_Life_Date"
+            ],
+            "logical_fields": {
+                "hostname": [
+                    "Configuration Item",
+                    "CI.Name",
+                    "Fully qualified domain name"
+                ],
+                "serial_number": [
+                    "Serial number"
+                ],
+                "model_number": [
+                    "Model number"
+                ],
+                "manufacturer": [
+                    "Manufacturer"
+                ],
+                "lifecycle_stage": [
+                    "Life Cycle Stage"
+                ],
+                "lifecycle_stage_status": [
+                    "Life Cycle Stage Status"
+                ],
+                "cmdb_eol": [
+                    "HW_End_Of_Life_Date"
+                ],
+                "cmdb_eosl": [
+                    "HW_End_Of_Support_Date"
+                ],
+                "class": [
+                    "Class"
+                ],
+                "category": [
+                    "Category"
+                ],
+                "subcategory": [
+                    "Subcategory"
+                ]
+            }
+        },
+        "server_cmdb": {
+            "display_name": "Server CMDB Report",
+            "key_fields": [
+                "Name",
+                "IP Address",
+                "Operating System",
+                "OS Version",
+                "Description",
+                "Serial number",
+                "Class",
+                "Location",
+                "Company",
+                "Life Cycle Stage",
+                "Life Cycle Stage Status",
+                "Category",
+                "Subcategory",
+                "Manufacturer",
+                "Model ID",
+                "Fully qualified domain name",
+                "OS Domain",
+                "Is Virtual",
+                "Due"
+            ],
+            "logical_fields": {
+                "hostname": [
+                    "Name",
+                    "Fully qualified domain name"
+                ],
+                "serial_number": [
+                    "Serial number"
+                ],
+                "model_id": [
+                    "Model ID"
+                ],
+                "manufacturer": [
+                    "Manufacturer"
+                ],
+                "lifecycle_stage": [
+                    "Life Cycle Stage"
+                ],
+                "lifecycle_stage_status": [
+                    "Life Cycle Stage Status"
+                ],
+                "cmdb_eol": [
+                    "Due"
+                ],
+                "class": [
+                    "Class"
+                ],
+                "category": [
+                    "Category"
+                ],
+                "subcategory": [
+                    "Subcategory"
+                ],
+                "is_virtual": [
+                    "Is Virtual"
+                ]
+            },
+            "constraints": {
+                "model_number_field_exists": false,
+                "authoritative_catalog_key": [
+                    "Manufacturer",
+                    "Model ID"
+                ]
+            }
+        },
+        "is_server": {
+            "display_name": "IS Server Report",
+            "key_fields": [
+                "id",
+                "server_opaque_id",
+                "serial_number",
+                "server_subcategory",
+                "server_manufacturer",
+                "server_hardware_type",
+                "server_hardware_model",
+                "server_catalog_source",
+                "server_lifecycle_status",
+                "server_end_of_life_date",
+                "server_end_of_support_date",
+                "server_end_of_extended_support_date",
+                "server_is_virtual",
+                "server_type"
+            ],
+            "logical_fields": {
+                "opaque_id": [
+                    "server_opaque_id",
+                    "id"
+                ],
+                "serial_number": [
+                    "serial_number"
+                ],
+                "subcategory": [
+                    "server_subcategory"
+                ],
+                "manufacturer": [
+                    "server_manufacturer"
+                ],
+                "hardware_type": [
+                    "server_hardware_type"
+                ],
+                "hardware_model": [
+                    "server_hardware_model"
+                ],
+                "lifecycle_status": [
+                    "server_lifecycle_status"
+                ],
+                "eol": [
+                    "server_end_of_life_date"
+                ],
+                "eosl": [
+                    "server_end_of_support_date"
+                ]
+            }
+        },
+        "is_network": {
+            "display_name": "IS Network Report",
+            "key_fields": [
+                "id",
+                "network_opaque_id",
+                "network_serial_number",
+                "network_subcategory",
+                "network_manufacturer",
+                "network_hardware_type",
+                "network_hardware_model",
+                "network_catalog_source",
+                "network_lifecycle_status",
+                "network_end_of_life_date",
+                "network_end_of_support_date",
+                "network_end_of_extended_support_date",
+                "network_is_virtual"
+            ],
+            "logical_fields": {
+                "opaque_id": [
+                    "network_opaque_id",
+                    "id"
+                ],
+                "serial_number": [
+                    "network_serial_number"
+                ],
+                "subcategory": [
+                    "network_subcategory"
+                ],
+                "manufacturer": [
+                    "network_manufacturer"
+                ],
+                "hardware_type": [
+                    "network_hardware_type"
+                ],
+                "hardware_model": [
+                    "network_hardware_model"
+                ],
+                "lifecycle_status": [
+                    "network_lifecycle_status"
+                ],
+                "eol": [
+                    "network_end_of_life_date"
+                ],
+                "eosl": [
+                    "network_end_of_support_date"
+                ]
+            }
+        },
+        "is_product_catalog_os": {
+            "display_name": "IS Product Catalog Operating System",
+            "key_fields": [
+                "domain",
+                "category",
+                "product_opaque_id",
+                "subcategory",
+                "catalog_type",
+                "software_provider",
+                "software_product_name",
+                "software_version",
+                "software_technology_level",
+                "end_of_life_date",
+                "end_of_support_date",
+                "end_of_extended_support_date",
+                "catalog_status"
+            ]
+        },
+        "is_product_catalog_network": {
+            "display_name": "IS Product Catalog Network",
+            "key_fields": [
+                "domain",
+                "category",
+                "product_opaque_id",
+                "subcategory",
+                "catalog_type",
+                "manufacturer",
+                "hardware_type",
+                "hardware_model",
+                "end_of_life_date",
+                "end_of_support_date",
+                "end_of_extended_support_date",
+                "catalog_status",
+                "end_of_life_status",
+                "end_of_support_status"
+            ]
+        },
+        "is_product_catalog_server": {
+            "display_name": "IS Product Catalog Server",
+            "key_fields": [
+                "domain",
+                "category",
+                "product_opaque_id",
+                "subcategory",
+                "catalog_type",
+                "manufacturer",
+                "hardware_type",
+                "hardware_model",
+                "end_of_life_date",
+                "end_of_support_date",
+                "end_of_extended_support_date",
+                "catalog_status",
+                "end_of_life_status",
+                "end_of_support_status"
+            ]
+        }
+    },
+    "explicit_field_mappings_from_workbook": [
+        {
+            "logical_field": "fully_qualified_hostname",
+            "is_operating_system": "fully_qualified_hostname",
+            "nw_cmdb": "Fully qualified domain name",
+            "server_cmdb": "Fully qualified domain name",
+            "is_server": "hostname",
+            "is_network": "Configuration Item"
+        },
+        {
+            "logical_field": "domain_name",
+            "is_operating_system": "domain_name",
+            "nw_cmdb": "Domain"
+        },
+        {
+            "logical_field": "lifecycle_stage",
+            "is_operating_system": "os_lifecycle_status",
+            "nw_cmdb": "Life Cycle Stage",
+            "server_cmdb": "Life Cycle Stage"
+        },
+        {
+            "logical_field": "serial_number",
+            "is_operating_system": "os_parent_serial_number",
+            "nw_cmdb": "Serial number",
+            "server_cmdb": "Serial number",
+            "is_server": "serial_number",
+            "is_network": "network_serial_number"
+        },
+        {
+            "logical_field": "manufacturer",
+            "is_operating_system": "os_parent_manufacturer",
+            "nw_cmdb": "Manufacturer",
+            "server_cmdb": "Manufacturer",
+            "is_server": "server_manufacturer",
+            "is_network": "network_manufacturer"
+        },
+        {
+            "logical_field": "opaque_id",
+            "is_operating_system": "os_parent_opaque_id",
+            "is_server": "server_opaque_id",
+            "is_network": "network_opaque_id"
+        },
+        {
+            "logical_field": "category",
+            "is_operating_system": "os_parent_category"
+        }
+    ],
+    "reconciliation_rules": {
+        "network": {
+            "catalog_match_source": "NW CMDB Model number",
+            "catalog_match_targets": [
+                "hardware_model",
+                "hardware_type",
+                "hardware_type + hardware_model"
+            ],
+            "category_presence_key": "NW CMDB Serial number -> IS Network network_serial_number",
+            "operational_filter": "Life Cycle Stage = Operational",
+            "date_comparison": {
+                "HW_End_Of_Life_Date": "end_of_life_date",
+                "HW_End_Of_Support_Date": "end_of_support_date"
+            },
+            "category_load_prefix_columns": [
+                "CMDB Hostname",
+                "CMDB Serial Number",
+                "CMDB Model ID",
+                "CMDB Model Number",
+                "CMDB Lifecycle Stage",
+                "CMDB Lifecycle Stage Status"
+            ],
+            "category_load_template": "IS Network Report headers in original order"
+        },
+        "server": {
+            "catalog_match_source": [
+                "Server CMDB Manufacturer",
+                "Server CMDB Model ID"
+            ],
+            "catalog_match_targets": [
+                "manufacturer",
+                "hardware_model"
+            ],
+            "category_presence_key": "Server CMDB Serial number -> IS Server serial_number",
+            "operational_filter": "Life Cycle Stage = Operational",
+            "date_comparison": {
+                "Due": "end_of_life_date"
+            },
+            "category_load_prefix_columns": [
+                "CMDB Hostname",
+                "CMDB Serial Number",
+                "CMDB Model ID",
+                "CMDB Lifecycle Stage",
+                "CMDB Lifecycle Stage Status"
+            ],
+            "category_load_template": "IS Server Report headers in original order"
+        }
+    },
+    "runtime_indexes_required": {
+        "network_catalog": [
+            "exact_model_index",
+            "hardware_type_index",
+            "partial_token_index",
+            "composite_index",
+            "subcategory_index"
+        ],
+        "server_catalog": [
+            "manufacturer_model_index",
+            "model_only_index",
+            "hardware_type_index",
+            "subcategory_index"
+        ],
+        "category_presence": [
+            "network_serial_index",
+            "server_serial_index"
+        ]
+    },
+    "output_files": [
+        "NW_Catalog_Match.xlsx",
+        "NW_Category_Load.xlsx",
+        "NW_Category_Catalog_Drift.xlsx",
+        "NW_Catalog_Enhancement_Recommendations.xlsx",
+        "Server_Catalog_Match.xlsx",
+        "Server_Category_Load.xlsx",
+        "Server_Category_Catalog_Drift.xlsx",
+        "Server_Catalog_Enhancement_Recommendations.xlsx",
+        "Governance_Summary.xlsx"
+    ]
+}
