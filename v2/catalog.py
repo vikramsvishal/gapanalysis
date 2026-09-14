@@ -1,7 +1,7 @@
 """Deterministic catalog-resolution service for V2.
 
 The resolver proposes/resolves catalog records; it does not execute loads.
-Ambiguous matches are deliberately returned as ambiguous instead of guessed.
+Ambiguous and similarity-only matches are deliberately gated for review.
 """
 from __future__ import annotations
 
@@ -27,7 +27,7 @@ class CatalogResolver:
     """Resolve one source identity against an authoritative catalog.
 
     Resolution order is deterministic. Similarity is only a late-stage candidate
-    mechanism and can never override an exact/composite result.
+    mechanism and can never silently authorize an IS load.
     """
 
     def __init__(self, records: Iterable[CatalogRecord], aliases: Optional[Mapping[str, str]] = None):
@@ -39,12 +39,8 @@ class CatalogResolver:
         self._normalized: Dict[str, List[CatalogRecord]] = {}
         for record in self.records:
             self._exact.setdefault(pkey(record.value) + "|" + vkey(record.version), []).append(record)
-            self._composite.setdefault(
-                pkey(record.category) + "|" + pkey(record.model) + "|" + vkey(record.version), []
-            ).append(record)
-            self._manufacturer_model.setdefault(
-                pkey(record.manufacturer) + "|" + pkey(record.model), []
-            ).append(record)
+            self._composite.setdefault(pkey(record.category) + "|" + pkey(record.model) + "|" + vkey(record.version), []).append(record)
+            self._manufacturer_model.setdefault(pkey(record.manufacturer) + "|" + pkey(record.model), []).append(record)
             self._normalized.setdefault(pkey(record.value), []).append(record)
 
     @staticmethod
@@ -113,7 +109,19 @@ class CatalogResolver:
             top_score = scored[0][0]
             top = [record for score, record in scored if abs(score - top_score) < 0.0001]
             if len(top) == 1:
-                return self._result(source, normalized, top, MatchMethod.TOKEN_SIMILARITY, "Deterministic similarity candidate; human review required", top_score)
+                record = top[0]
+                return CatalogResolution(
+                    source_value=source,
+                    normalized_source_value=normalized,
+                    catalog_record_id=record.record_id,
+                    catalog_value=record.value,
+                    match_method=MatchMethod.TOKEN_SIMILARITY,
+                    confidence=top_score,
+                    status="REVIEW REQUIRED",
+                    reason="Similarity candidate requires human approval before load",
+                    load_allowed=False,
+                    evidence={"candidate_record_ids": [record.record_id]},
+                )
             return CatalogResolution(
                 source_value=source,
                 normalized_source_value=normalized,
