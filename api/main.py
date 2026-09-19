@@ -117,3 +117,29 @@ def version() -> dict[str, str]:
         "application": _service.version,
         "golden_engine": _service.golden_version,
     }
+
+
+@app.post("/api/jobs")
+def create_job(request: dict[str, Any]) -> dict[str, Any]:
+    operation = request.get("operation")
+    if not operation:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=400, detail="operation is required")
+    payload = request.get("payload") or {}
+    actor = request.get("actor") or "local-user"
+    job = _service.start_job(operation, payload, actor)
+    return job.public()
+
+
+@app.get("/api/jobs")
+def list_jobs() -> dict[str, Any]:
+    return {"items": [job.public() for job in _service.list_jobs()]}
+
+
+@app.get("/api/jobs/{job_id}")
+def get_job(job_id: str) -> dict[str, Any]:
+    from fastapi import HTTPException
+    job = _service.get_job(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="job not found")
+    return job.public()
