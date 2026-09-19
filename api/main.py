@@ -155,6 +155,12 @@ def create_job(request: dict[str, Any]) -> dict[str, Any]:
         raise HTTPException(status_code=400, detail="operation is required")
     payload = request.get("payload") or {}
     actor = request.get("actor") or "local-user"
+    if operation in {"reconcile_network","reconcile_server","run_hardware_governance"}:
+        if not payload.get("resources"):
+            raise HTTPException(status_code=409, detail={"message":"Required input resources must be loaded before starting this operation"})
+        check = _service.governance.preflight(operation, payload)
+        if not check["ready"]:
+            raise HTTPException(status_code=409, detail={"message":"Required input files are missing","missing":check["missing"]})
     job = _service.start_job(operation, payload, actor)
     return job.public()
 
