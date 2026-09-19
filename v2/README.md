@@ -36,3 +36,8 @@ v2/
 - No-match conditions can produce a catalog-update-required state.
 - FQDN requirements remain policy-driven and human-in-the-loop where required.
 - Source evidence, normalized evidence, current IS state, required value and load value remain separate concepts.
+
+
+## Enterprise UI
+
+The V2 branch now includes a React + Vite enterprise UI under `web/`. The UI is intentionally an application shell over the governance engine, not a second implementation of business rules. Current screens cover the portal shell, governance overview, reconciliation workspace, governance decisions, jobs, exceptions and audit/evidence areas. The HTTP API seam is defined separately so real execution can be wired without moving governance logic into the browser.
