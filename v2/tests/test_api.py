@@ -28,3 +28,11 @@ def test_applications_endpoint_exposes_dormant_future_apps():
     assert apps["CMDB_IS_GOVERNANCE"] == "ACTIVE"
     assert apps["INFRA_GAP_ANALYSIS"] == "DEVELOPMENT"
     assert apps["QIR"] == "DEVELOPMENT"
+
+
+def test_preflight_reports_exact_missing_inputs():
+    response = client.post("/api/governance/preflight", json={"operation":"reconcile_network","payload":{"resources":{}}})
+    assert response.status_code == 200
+    data = response.json()
+    assert data["ready"] is False
+    assert [x["kind"] for x in data["missing"]] == ["nw_cmdb","is_os","catalog_os"]
