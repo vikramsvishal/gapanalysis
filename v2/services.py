@@ -1,7 +1,13 @@
-"""V2 service boundary. Initially delegates to V1.4.1."""
+"""V2 service boundary.
+
+The service layer owns governance capabilities while delegating business
+behavior to the single V1.4.1 compatibility adapter during migration.
+"""
 from __future__ import annotations
 from typing import Any
-from .golden import load_golden
+
+from .legacy_adapter import load_golden
+
 
 class GovernanceService:
     def __init__(self, engine: Any | None = None):
