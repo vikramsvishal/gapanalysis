@@ -4,24 +4,23 @@ from dataclasses import dataclass
 from typing import Any
 
 from .agents import AgentRegistry, default_registry
-from .domain import JobResult
-from .legacy_adapter import load_golden
+from .services import GovernanceService
 
 
 @dataclass
 class ApplicationService:
-    """Application facade independent of Tkinter."""
+    """Application facade independent of Tkinter or HTTP transport."""
 
     agents: AgentRegistry | None = None
-    golden: Any | None = None
+    governance: GovernanceService | None = None
 
     def __post_init__(self):
+        self.governance = self.governance or GovernanceService()
         self.agents = self.agents or default_registry()
-        self.golden = self.golden or load_golden()
 
     @property
     def version(self) -> str:
-        return "2.0.0-alpha.1"
+        return "2.0.0-alpha.2"
 
     @property
     def golden_version(self) -> str:
@@ -38,15 +37,15 @@ class ApplicationService:
         }
 
     def legacy_operation(self, operation: str, *args, **kwargs):
-        """Invoke an existing V1.4.1 operation through the V2 application seam."""
+        """Compatibility operation routed through the V2 service boundary."""
         allowed = {
-            "reconcile_network": "reconcile_nw",
-            "reconcile_server": "reconcile_server",
-            "run_hardware_governance": "run_hardware_governance",
-            "generate_bulk_load": "generate_bulk_load",
-            "category_decisions_from_load": "category_decisions_from_load",
+            "reconcile_network": self.governance.reconcile_network,
+            "reconcile_server": self.governance.reconcile_server,
+            "run_hardware_governance": self.governance.run_hardware_governance,
+            "generate_bulk_load": self.governance.generate_bulk_load,
+            "category_decisions_from_load": self.governance.category_decisions_from_load,
         }
         target = allowed.get(operation)
         if not target:
             raise ValueError(f"Unsupported governance operation: {operation}")
-        return getattr(self.golden, target)(*args, **kwargs)
+        return target(*args, **kwargs)
