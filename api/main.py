@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import FastAPI
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
 from v2.application import ApplicationService
@@ -109,6 +109,34 @@ def operations() -> dict[str, Any]:
 @app.get("/api/agents")
 def agents() -> dict[str, Any]:
     return {"items": list(_service.agents.names())}
+
+
+@app.get("/api/resources/types")
+def resource_types() -> dict[str, Any]:
+    return {"items": _service.governance.resources.public_catalog()}
+
+
+@app.get("/api/resources")
+def resources(kind: str | None = None) -> dict[str, Any]:
+    return {"items": [item.public() for item in _service.governance.resources.list(kind)]}
+
+
+@app.post("/api/resources/upload")
+async def upload_resource(kind: str = Form(...), file: UploadFile = File(...)) -> dict[str, Any]:
+    try:
+        content = await file.read()
+        record = _service.governance.resources.register_upload(kind, file.filename or "uploaded-file", content)
+        return record.public()
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.post("/api/governance/preflight")
+def governance_preflight(request: dict[str, Any]) -> dict[str, Any]:
+    operation = request.get("operation")
+    if not operation:
+        raise HTTPException(status_code=400, detail="operation is required")
+    return _service.governance.preflight(operation, request.get("payload") or {})
 
 
 @app.get("/api/version")
