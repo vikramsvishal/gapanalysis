@@ -21,3 +21,12 @@ def test_exception_lifecycle(tmp_path):
 
     restored = ExceptionStore(tmp_path / "exceptions.json")
     assert restored.get(item.exception_id).resolution == "Approved candidate CATALOG-42"
+
+
+def test_exception_resolution_records_candidate_decision(tmp_path):
+    store = ExceptionStore(tmp_path / "exceptions.json")
+    record = store.create("RES-1", "OS_LOAD_CANDIDATE_REVIEW", "Review", "Candidate review", candidate_id="CAND-1", candidate={"row_index": "4"})
+    resolved = store.resolve(record.exception_id, "reviewer", "Evidence checked", "REJECT")
+    assert resolved.status == "RESOLVED"
+    assert resolved.decision == "REJECT"
+    assert resolved.candidate_id == "CAND-1"
