@@ -13,6 +13,8 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
+import hashlib
+import json
 
 from .approvals import ApprovalStore
 
@@ -170,6 +172,8 @@ class JobManager:
                         )
 
             if candidates and self.approval_store is not None and result_record is not None:
+                candidate_payload = json.dumps(candidates, sort_keys=True, separators=(",", ":"), default=str)
+                candidate_sha = hashlib.sha256(candidate_payload.encode("utf-8")).hexdigest()
                 approval = self.approval_store.create(
                     result_record.result_id,
                     str(result.get("domain", "")),
@@ -177,6 +181,7 @@ class JobManager:
                     payload.get("resources") or {},
                     int(result.get("candidate_count", 0)),
                     [str(x.get("candidate_id")) for x in candidates if x.get("candidate_id")],
+                    candidate_snapshot_sha256=candidate_sha,
                 )
                 result = dict(result)
                 result["approval_id"] = approval.approval_id
