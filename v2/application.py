@@ -9,6 +9,7 @@ from .results import ResultStore
 from .evidence import EvidenceStore
 from .exceptions import ExceptionStore
 from .audit import AuditStore
+from .approvals import ApprovalStore
 
 
 @dataclass
@@ -22,6 +23,7 @@ class ApplicationService:
     evidence: EvidenceStore | None = None
     exceptions: ExceptionStore | None = None
     audit: AuditStore | None = None
+    approvals: ApprovalStore | None = None
 
     def __post_init__(self):
         self.governance = self.governance or GovernanceService()
@@ -29,10 +31,11 @@ class ApplicationService:
         self.evidence = self.evidence or EvidenceStore()
         self.exceptions = self.exceptions or ExceptionStore()
         self.audit = self.audit or AuditStore()
+        self.approvals = self.approvals or ApprovalStore()
         self.results = self.results or ResultStore(evidence_store=self.evidence)
         if getattr(self.results, "evidence_store", None) is None:
             self.results.evidence_store = self.evidence
-        self.jobs = self.jobs or JobManager(self.governance, result_store=self.results, exception_store=self.exceptions, audit_store=self.audit)
+        self.jobs = self.jobs or JobManager(self.governance, result_store=self.results, exception_store=self.exceptions, audit_store=self.audit, approval_store=self.approvals)
 
     @property
     def version(self) -> str:
@@ -86,10 +89,35 @@ class ApplicationService:
     def list_exceptions(self):
         return self.exceptions.list()
 
-    def resolve_exception(self, exception_id: str, actor: str, resolution: str):
-        record = self.exceptions.resolve(exception_id, actor, resolution)
-        self.audit.append("EXCEPTION", actor, "EXCEPTION", exception_id, "RESOLVED", {"result_id": record.result_id, "resolution": resolution})
+    def resolve_exception(self, exception_id: str, actor: str, resolution: str, decision: str = "APPROVE"):
+        record = self.exceptions.resolve(exception_id, actor, resolution, decision)
+        self.audit.append(
+            "EXCEPTION", actor, "EXCEPTION", exception_id, "RESOLVED",
+            {"result_id": record.result_id, "resolution": resolution, "decision": record.decision},
+        )
         return record
+
+    def get_approval(self, approval_id: str):
+        return self.approvals.get(approval_id)
+
+    def result_approval(self, result_id: str):
+        return self.approvals.for_result(result_id)
+
+    def list_approvals(self):
+        return self.approvals.list()
+
+    def finalize_bulk_load(self, approval_id: str, actor: str = "local-user"):
+        approval = self.approvals.get(approval_id)
+        if approval is None:
+            raise KeyError(approval_id)
+        exceptions = self.exceptions.for_result(approval.result_id)
+        result = self.governance.finalize_bulk_load(approval, exceptions, actor)
+        finalized = self.approvals.finalize(approval_id, actor, result)
+        self.audit.append(
+            "APPROVAL", actor, "APPROVAL", approval_id, "FINALIZED",
+            {"result_id": approval.result_id, "approved_count": result.get("approved_count")},
+        )
+        return finalized
 
     def get_audit(self, event_id: str):
         return self.audit.get(event_id)
