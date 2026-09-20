@@ -14,6 +14,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
+from .approvals import ApprovalStore
+
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -59,11 +61,12 @@ class JobRecord:
 
 
 class JobManager:
-    def __init__(self, service: Any, state_path: Path | None = None, result_store: Any | None = None, exception_store: Any | None = None, audit_store: Any | None = None):
+    def __init__(self, service: Any, state_path: Path | None = None, result_store: Any | None = None, exception_store: Any | None = None, audit_store: Any | None = None, approval_store: ApprovalStore | None = None):
         self.service = service
         self.result_store = result_store
         self.exception_store = exception_store
         self.audit_store = audit_store
+        self.approval_store = approval_store
         self.state_path = state_path or (
             Path(__file__).resolve().parent / "runtime" / "jobs.json"
         )
@@ -141,8 +144,9 @@ class JobManager:
             )
             result = self.service.execute_operation(operation, payload, progress=progress)
             exception_ids = []
+            candidates = result.get("exception_candidates", []) if isinstance(result, dict) else []
             if result_record is not None and self.exception_store is not None:
-                for candidate in (result.get("exception_candidates", []) if isinstance(result, dict) else []):
+                for candidate in candidates:
                     exc = self.exception_store.create(
                         result_record.result_id,
                         candidate["code"],
@@ -151,13 +155,40 @@ class JobManager:
                         severity=candidate.get("severity", "REVIEW"),
                         recommendation=candidate.get("recommendation", ""),
                         evidence_ids=[x.evidence_id for x in evidence_records],
+                        candidate_id=candidate.get("candidate_id"),
+                        candidate=candidate.get("candidate") or {},
                     )
                     exception_ids.append(exc.exception_id)
                     if self.audit_store is not None:
                         self.audit_store.append(
                             "EXCEPTION", self._jobs[job_id].actor, "EXCEPTION", exc.exception_id,
-                            "OPENED", {"result_id": result_record.result_id, "code": exc.code},
+                            "OPENED", {
+                                "result_id": result_record.result_id,
+                                "code": exc.code,
+                                "candidate_id": exc.candidate_id,
+                            },
                         )
+
+            if candidates and self.approval_store is not None and result_record is not None:
+                approval = self.approval_store.create(
+                    result_record.result_id,
+                    str(result.get("domain", "")),
+                    self._jobs[job_id].actor,
+                    payload.get("resources") or {},
+                    int(result.get("candidate_count", 0)),
+                    [str(x.get("candidate_id")) for x in candidates if x.get("candidate_id")],
+                )
+                result = dict(result)
+                result["approval_id"] = approval.approval_id
+                if self.audit_store is not None:
+                    self.audit_store.append(
+                        "APPROVAL", self._jobs[job_id].actor, "APPROVAL", approval.approval_id,
+                        "CREATED", {
+                            "result_id": result_record.result_id,
+                            "candidate_count": approval.candidate_count,
+                            "review_candidate_count": len(approval.review_candidate_ids),
+                        },
+                    )
             self._update(
                 job_id,
                 status="COMPLETED",
