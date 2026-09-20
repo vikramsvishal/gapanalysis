@@ -6,6 +6,7 @@ from typing import Any
 
 from .legacy_adapter import load_golden
 from .resources import ResourceManager
+from .approvals import candidate_id
 
 
 class GovernanceService:
@@ -95,49 +96,147 @@ class GovernanceService:
                 raise ValueError("OS Bulk Load Governance requires domain=network or domain=server")
             load_kind = "nw_load_to_is" if domain == "network" else "server_load_to_is"
             category_kind = "is_network_category" if domain == "network" else "is_server_category"
-            load_df = self.engine.read_load_to_is_file(self._record(payload, load_kind).stored_path, domain, progress)
-            governance = self.engine.category_decisions_from_load(domain, load_df, self._record(payload, category_kind).stored_path, progress)
+            load_df = self.engine.read_load_to_is_file(
+                self._record(payload, load_kind).stored_path, domain, progress
+            )
+            governance = self.engine.category_decisions_from_load(
+                domain, load_df, self._record(payload, category_kind).stored_path, progress
+            )
             include_missing_fqdn = bool(payload.get("include_missing_fqdn", False))
-            missing_fqdn_count = sum(1 for _, row in load_df.iterrows() if not self.engine.valid_fqdn(row.get("Fully qualified domain name", "")))
+            missing_rows = [
+                idx for idx, row in load_df.iterrows()
+                if not self.engine.valid_fqdn(row.get("Fully qualified domain name", ""))
+            ]
+            missing_fqdn_count = len(missing_rows)
             if missing_fqdn_count and "include_missing_fqdn" not in payload:
-                raise ValueError(f"{missing_fqdn_count} candidates have no valid FQDN; explicit human decision is required")
+                raise ValueError(
+                    f"{missing_fqdn_count} candidates have no valid FQDN; explicit human decision is required"
+                )
+
             fmt = str(payload.get("format", "xlsx")).lower()
             if fmt not in {"xlsx", "csv"}:
                 raise ValueError("OS Bulk Load output format must be xlsx or csv")
+
+            decisions = governance.get("decisions")
+            blocked_by_row: dict[Any, list[str]] = {}
+            if decisions is not None and not decisions.empty and "Recommended Action" in decisions.columns:
+                blocked = decisions[
+                    decisions["Recommended Action"].isin(
+                        ["CATEGORY DATA QUALITY REVIEW", "NO LOAD ACTION"]
+                    )
+                ]
+                for idx, row in blocked.head(500).iterrows():
+                    blocked_by_row.setdefault(idx, []).append(
+                        f"category decision: {row.get('Recommended Action')}"
+                    )
+
+            if not include_missing_fqdn:
+                for idx in missing_rows[:500]:
+                    blocked_by_row.setdefault(idx, []).append("missing or invalid FQDN")
+
+            exception_candidates = []
+            for idx, reasons in blocked_by_row.items():
+                row = load_df.loc[idx]
+                candidate = {
+                    "row_index": str(idx),
+                    "reasons": reasons,
+                    "data": {str(k): str(v) for k, v in row.items()},
+                }
+                exception_candidates.append({
+                    "candidate_id": candidate_id(domain, idx, candidate),
+                    "code": "OS_LOAD_CANDIDATE_REVIEW",
+                    "title": "OS bulk-load candidate requires human approval",
+                    "description": (
+                        f"{domain} candidate row={idx} is blocked from the controlled "
+                        f"load package pending review: {'; '.join(reasons)}"
+                    ),
+                    "recommendation": (
+                        "Review the evidence and either approve or reject this candidate "
+                        "before generating the controlled load package."
+                    ),
+                    "severity": "REVIEW",
+                    "candidate": candidate,
+                })
+
+            base = {
+                "domain": domain,
+                "candidate_count": len(load_df),
+                "missing_fqdn_count": missing_fqdn_count,
+                "include_missing_fqdn": include_missing_fqdn,
+                "governance_summary": {
+                    "decisions": len(governance["decisions"]),
+                    "category_load_candidates": len(governance.get("category_load", [])),
+                },
+                "exception_candidates": exception_candidates,
+            }
+
+            # V2 governance gate: V1.4.1 is not invoked to create a final load
+            # package until every blocked candidate has an explicit disposition.
+            if exception_candidates:
+                return {
+                    **base,
+                    "status": "REVIEW_REQUIRED",
+                    "approval_required": True,
+                    "outputs": [],
+                }
+
             outputs = self.engine.generate_bulk_load(
                 load_df, domain, self._record(payload, "is_os").stored_path,
                 self._record(payload, "bulk_template").stored_path, str(self.output_dir), fmt,
                 lambda _count: include_missing_fqdn, lambda _count: True, progress, governance,
             )
-            decisions = governance.get("decisions")
-            exception_candidates = []
-            if decisions is not None and not decisions.empty and "Recommended Action" in decisions.columns:
-                blocked = decisions[decisions["Recommended Action"].isin(
-                    ["CATEGORY DATA QUALITY REVIEW", "NO LOAD ACTION"]
-                )]
-                for idx, row in blocked.head(500).iterrows():
-                    exception_candidates.append({
-                        "code": "OS_LOAD_CATEGORY_REVIEW",
-                        "title": "OS bulk-load candidate requires category review",
-                        "description": f"{domain} candidate requires human category/governance review before controlled loading. Row={idx}; action={row.get('Recommended Action')}",
-                        "recommendation": "Review the authoritative category decision and resolve before production loading.",
-                        "severity": "REVIEW",
-                        "candidate": {str(k): str(v) for k, v in row.items() if k != "Recommended Action"},
-                    })
-            if missing_fqdn_count:
-                exception_candidates.append({
-                    "code": "OS_LOAD_FQDN_REVIEW",
-                    "title": "OS bulk-load candidates have missing or invalid FQDN",
-                    "description": f"{missing_fqdn_count} {domain} candidates have missing or invalid FQDN values.",
-                    "recommendation": "Human review is required before allowing the V1.4.1 FQDN policy to generate or accept a load value.",
-                    "severity": "REVIEW",
-                })
-            return {"domain": domain, "candidate_count": len(load_df), "missing_fqdn_count": missing_fqdn_count,
-                    "include_missing_fqdn": include_missing_fqdn,
-                    "governance_summary": {"decisions": len(governance["decisions"]), "category_load_candidates": len(governance.get("category_load", []))},
-                    "exception_candidates": exception_candidates,
-                    "outputs": outputs}
+            return {
+                **base,
+                "status": "LOAD_PACKAGE_GENERATED",
+                "approval_required": False,
+                "outputs": outputs,
+            }
         raise ValueError(f"Resource-backed execution is not implemented for: {operation}")
+
+    def finalize_bulk_load(self, approval, exceptions, actor: str = "local-user"):
+        if approval.status != "PENDING_REVIEW":
+            raise ValueError(f"Approval package is not pending review: {approval.status}")
+        if not exceptions:
+            raise ValueError("Approval package has no review candidates")
+        unresolved = [x for x in exceptions if x.status != "RESOLVED" or x.decision not in {"APPROVE", "REJECT"}]
+        if unresolved:
+            raise ValueError(f"{len(unresolved)} candidate review(s) remain unresolved")
+
+        load_kind = "nw_load_to_is" if approval.domain == "network" else "server_load_to_is"
+        category_kind = "is_network_category" if approval.domain == "network" else "is_server_category"
+        payload = {"resources": approval.resource_inputs}
+        load_df = self.engine.read_load_to_is_file(
+            self._record(payload, load_kind).stored_path, approval.domain
+        )
+        governance = self.engine.category_decisions_from_load(
+            approval.domain, load_df, self._record(payload, category_kind).stored_path
+        )
+        rejected_rows = {
+            str(x.candidate.get("row_index"))
+            for x in exceptions
+            if x.decision == "REJECT"
+        }
+        approved_df = load_df[
+            [str(idx) not in rejected_rows for idx in load_df.index]
+        ].copy()
+        if approved_df.empty:
+            raise ValueError("No candidates remain approved for the controlled load package")
+
+        fmt = "xlsx"
+        outputs = self.engine.generate_bulk_load(
+            approved_df, approval.domain, self._record(payload, "is_os").stored_path,
+            self._record(payload, "bulk_template").stored_path, str(self.output_dir), fmt,
+            lambda _count: True, lambda _count: True, lambda message, percent=0: None, governance,
+        )
+        return {
+            "status": "LOAD_PACKAGE_GENERATED",
+            "approval_id": approval.approval_id,
+            "domain": approval.domain,
+            "candidate_count": len(load_df),
+            "approved_count": len(approved_df),
+            "rejected_count": len(load_df) - len(approved_df),
+            "outputs": outputs,
+        }
 
     def _dispatch(self, operation: str, kwargs: dict[str, Any]):
         target = {"reconcile_network":self.reconcile_network,"reconcile_server":self.reconcile_server,
