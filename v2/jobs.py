@@ -59,8 +59,9 @@ class JobRecord:
 
 
 class JobManager:
-    def __init__(self, service: Any, state_path: Path | None = None):
+    def __init__(self, service: Any, state_path: Path | None = None, result_store: Any | None = None):
         self.service = service
+        self.result_store = result_store
         self.state_path = state_path or (
             Path(__file__).resolve().parent / "runtime" / "jobs.json"
         )
@@ -121,7 +122,10 @@ class JobManager:
 
     def _execute(self, job_id: str, operation: str, payload: dict[str, Any]) -> None:
         self._update(job_id, status="RUNNING", progress=1, message="Starting", started_at=_now())
+        result_record = None
         try:
+            if self.result_store is not None:
+                result_record = self.result_store.create(job_id, operation, self._jobs[job_id].actor, (payload.get("resources") or {}))
             progress = lambda message, percent=0: self._update(
                 job_id, progress=max(1, min(99, int(percent))), message=str(message)
             )
@@ -134,6 +138,8 @@ class JobManager:
                 completed_at=_now(),
                 result=_safe_summary(result),
             )
+            if result_record is not None:
+                self.result_store.complete(result_record.result_id, _safe_summary(result), evidence_ids=[], exception_ids=[])
         except Exception as exc:  # job failures must be visible, not crash the API
             self._update(
                 job_id,
@@ -143,3 +149,5 @@ class JobManager:
                 completed_at=_now(),
                 error=f"{type(exc).__name__}: {exc}",
             )
+            if result_record is not None:
+                self.result_store.fail(result_record.result_id, {"error": f"{type(exc).__name__}: {exc}"})
