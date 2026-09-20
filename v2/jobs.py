@@ -59,9 +59,11 @@ class JobRecord:
 
 
 class JobManager:
-    def __init__(self, service: Any, state_path: Path | None = None, result_store: Any | None = None):
+    def __init__(self, service: Any, state_path: Path | None = None, result_store: Any | None = None, exception_store: Any | None = None, audit_store: Any | None = None):
         self.service = service
         self.result_store = result_store
+        self.exception_store = exception_store
+        self.audit_store = audit_store
         self.state_path = state_path or (
             Path(__file__).resolve().parent / "runtime" / "jobs.json"
         )
@@ -138,6 +140,24 @@ class JobManager:
                 job_id, progress=max(1, min(99, int(percent))), message=str(message)
             )
             result = self.service.execute_operation(operation, payload, progress=progress)
+            exception_ids = []
+            if result_record is not None and self.exception_store is not None:
+                for candidate in (result.get("exception_candidates", []) if isinstance(result, dict) else []):
+                    exc = self.exception_store.create(
+                        result_record.result_id,
+                        candidate["code"],
+                        candidate["title"],
+                        candidate["description"],
+                        severity=candidate.get("severity", "REVIEW"),
+                        recommendation=candidate.get("recommendation", ""),
+                        evidence_ids=[x.evidence_id for x in evidence_records],
+                    )
+                    exception_ids.append(exc.exception_id)
+                    if self.audit_store is not None:
+                        self.audit_store.append(
+                            "EXCEPTION", self._jobs[job_id].actor, "EXCEPTION", exc.exception_id,
+                            "OPENED", {"result_id": result_record.result_id, "code": exc.code},
+                        )
             self._update(
                 job_id,
                 status="COMPLETED",
@@ -151,7 +171,7 @@ class JobManager:
                     result_record.result_id,
                     _safe_summary(result),
                     evidence_ids=[x.evidence_id for x in evidence_records],
-                    exception_ids=[],
+                    exception_ids=exception_ids,
                 )
         except Exception as exc:  # job failures must be visible, not crash the API
             self._update(
