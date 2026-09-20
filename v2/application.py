@@ -32,7 +32,7 @@ class ApplicationService:
         self.results = self.results or ResultStore(evidence_store=self.evidence)
         if getattr(self.results, "evidence_store", None) is None:
             self.results.evidence_store = self.evidence
-        self.jobs = self.jobs or JobManager(self.governance, result_store=self.results)
+        self.jobs = self.jobs or JobManager(self.governance, result_store=self.results, exception_store=self.exceptions, audit_store=self.audit)
 
     @property
     def version(self) -> str:
