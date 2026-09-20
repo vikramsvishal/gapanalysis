@@ -137,7 +137,13 @@ def governance_preflight(request: dict[str, Any]) -> dict[str, Any]:
     operation = request.get("operation")
     if not operation:
         raise HTTPException(status_code=400, detail="operation is required")
-    return _service.governance.preflight(operation, request.get("payload") or {})
+    payload = request.get("payload") or {}
+    if operation == "generate_bulk_load":
+        domain = payload.get("domain")
+        if domain not in {"network", "server"}:
+            raise HTTPException(status_code=400, detail="domain must be network or server")
+        return _service.governance.bulk_preflight(domain, payload)
+    return _service.governance.preflight(operation, payload)
 
 
 @app.get("/api/version")
@@ -155,7 +161,7 @@ def create_job(request: dict[str, Any]) -> dict[str, Any]:
         raise HTTPException(status_code=400, detail="operation is required")
     payload = request.get("payload") or {}
     actor = request.get("actor") or "local-user"
-    if operation in {"reconcile_network", "reconcile_server", "run_hardware_governance"}:
+    if operation in {"reconcile_network", "reconcile_server", "run_hardware_governance", "generate_bulk_load"}:
         if not payload.get("resources"):
             raise HTTPException(
                 status_code=409,
