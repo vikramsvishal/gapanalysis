@@ -126,6 +126,7 @@ async def upload_resource(kind: str = Form(...), file: UploadFile = File(...)) -
     try:
         content = await file.read()
         record = _service.governance.resources.register_upload(kind, file.filename or "uploaded-file", content)
+        _service.audit.append("RESOURCE", "local-user", "RESOURCE", record.resource_id, "UPLOADED", {"kind": kind, "file_name": record.file_name, "sha256": record.sha256, "size": record.size})
         return record.public()
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
@@ -173,6 +174,24 @@ def create_job(request: dict[str, Any]) -> dict[str, Any]:
 @app.get("/api/jobs")
 def list_jobs() -> dict[str, Any]:
     return {"items": [job.public() for job in _service.list_jobs()]}
+
+
+@app.get("/api/audit")
+def list_audit() -> dict[str, Any]:
+    return {"items": [item.public() for item in _service.list_audit()]}
+
+
+@app.get("/api/audit/{event_id}")
+def get_audit(event_id: str) -> dict[str, Any]:
+    item = _service.get_audit(event_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="audit event not found")
+    return item.public()
+
+
+@app.get("/api/audit/entity/{entity_type}/{entity_id}")
+def entity_audit(entity_type: str, entity_id: str) -> dict[str, Any]:
+    return {"items": [item.public() for item in _service.entity_audit(entity_type, entity_id)]}
 
 
 @app.get("/api/exceptions")
