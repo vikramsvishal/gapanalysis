@@ -1,6 +1,9 @@
 """Application boundary for the V2 local enterprise edition."""
 from __future__ import annotations
 from dataclasses import dataclass
+import hashlib
+import json
+from pathlib import Path
 
 from .agents import AgentRegistry, default_registry
 from .jobs import JobManager
@@ -112,6 +115,29 @@ class ApplicationService:
             raise KeyError(approval_id)
         exceptions = self.exceptions.for_result(approval.result_id)
         result = self.governance.finalize_bulk_load(approval, exceptions, actor)
+
+        decision_snapshot = [
+            {
+                "candidate_id": x.candidate_id,
+                "exception_id": x.exception_id,
+                "decision": x.decision,
+                "resolution": x.resolution,
+                "resolved_by": x.resolved_by,
+            }
+            for x in sorted(exceptions, key=lambda item: item.exception_id)
+        ]
+        decision_payload = json.dumps(decision_snapshot, sort_keys=True, separators=(",", ":"), default=str)
+        decision_sha = hashlib.sha256(decision_payload.encode("utf-8")).hexdigest()
+        evidence = self.evidence.capture_text(
+            approval.result_id, "APPROVAL_DECISION_SNAPSHOT", approval.approval_id,
+            approval.approval_id + "-decision-snapshot.json", decision_payload,
+        )
+        output_hashes = {}
+        for output in result.get("outputs", []):
+            path = output.get("path") if isinstance(output, dict) else None
+            if path and Path(path).is_file():
+                output_hashes[str(path)] = hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
         self.results.update_summary(
             approval.result_id,
             {
@@ -120,10 +146,10 @@ class ApplicationService:
                 "finalization": result,
             },
         )
-        finalized = self.approvals.finalize(approval_id, actor, result)
+        finalized = self.approvals.finalize(approval_id, actor, result, decision_snapshot_sha256=decision_sha, output_sha256=output_hashes)
         self.audit.append(
             "APPROVAL", actor, "APPROVAL", approval_id, "FINALIZED",
-            {"result_id": approval.result_id, "approved_count": result.get("approved_count")},
+            {"result_id": approval.result_id, "approved_count": result.get("approved_count"), "decision_snapshot_sha256": decision_sha, "output_sha256": output_hashes, "evidence_id": evidence.evidence_id},
         )
         return finalized
 
