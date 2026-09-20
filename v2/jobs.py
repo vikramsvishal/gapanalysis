@@ -123,9 +123,17 @@ class JobManager:
     def _execute(self, job_id: str, operation: str, payload: dict[str, Any]) -> None:
         self._update(job_id, status="RUNNING", progress=1, message="Starting", started_at=_now())
         result_record = None
+        evidence_records = []
         try:
             if self.result_store is not None:
                 result_record = self.result_store.create(job_id, operation, self._jobs[job_id].actor, (payload.get("resources") or {}))
+                evidence_store = getattr(self.result_store, "evidence_store", None)
+                resources = getattr(self.service, "resources", None)
+                if evidence_store is not None and resources is not None:
+                    for resource_id in (payload.get("resources") or {}).values():
+                        resource = resources.get(resource_id)
+                        if resource is not None:
+                            evidence_records.append(evidence_store.capture_resource(result_record.result_id, resource))
             progress = lambda message, percent=0: self._update(
                 job_id, progress=max(1, min(99, int(percent))), message=str(message)
             )
@@ -139,7 +147,7 @@ class JobManager:
                 result=_safe_summary(result),
             )
             if result_record is not None:
-                self.result_store.complete(result_record.result_id, _safe_summary(result), evidence_ids=[], exception_ids=[])
+                self.result_store.complete(result_record.result_id, _safe_summary(result), evidence_ids=[x.evidence_id for x in evidence_records], exception_ids=[])
             if result_record is not None:
                 self.result_store.complete(result_record.result_id, _safe_summary(result), evidence_ids=[], exception_ids=[])
         except Exception as exc:  # job failures must be visible, not crash the API
