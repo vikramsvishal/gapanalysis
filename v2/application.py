@@ -22,8 +22,10 @@ class ApplicationService:
     def __post_init__(self):
         self.governance = self.governance or GovernanceService()
         self.agents = self.agents or default_registry()
-        self.results = self.results or ResultStore()
         self.evidence = self.evidence or EvidenceStore()
+        self.results = self.results or ResultStore(evidence_store=self.evidence)
+        if getattr(self.results, "evidence_store", None) is None:
+            self.results.evidence_store = self.evidence
         self.jobs = self.jobs or JobManager(self.governance, result_store=self.results)
 
     @property
