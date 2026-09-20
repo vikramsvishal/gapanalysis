@@ -1,4 +1,4 @@
-"""FastAPI boundary for the local CMDB & IS Governance edition.
+""""FastAPI boundary for the local CMDB & IS Governance edition.
 
 The API owns transport concerns only. Governance behavior remains behind
 ApplicationService and the V1.4.1 compatibility seam until extracted safely.
@@ -151,16 +151,21 @@ def version() -> dict[str, str]:
 def create_job(request: dict[str, Any]) -> dict[str, Any]:
     operation = request.get("operation")
     if not operation:
-        from fastapi import HTTPException
         raise HTTPException(status_code=400, detail="operation is required")
     payload = request.get("payload") or {}
     actor = request.get("actor") or "local-user"
-    if operation in {"reconcile_network","reconcile_server","run_hardware_governance"}:
+    if operation in {"reconcile_network", "reconcile_server", "run_hardware_governance"}:
         if not payload.get("resources"):
-            raise HTTPException(status_code=409, detail={"message":"Required input resources must be loaded before starting this operation"})
+            raise HTTPException(
+                status_code=409,
+                detail={"message": "Required input resources must be loaded before starting this operation"},
+            )
         check = _service.governance.preflight(operation, payload)
         if not check["ready"]:
-            raise HTTPException(status_code=409, detail={"message":"Required input files are missing","missing":check["missing"]})
+            raise HTTPException(
+                status_code=409,
+                detail={"message": "Required input files are missing", "missing": check["missing"]},
+            )
     job = _service.start_job(operation, payload, actor)
     return job.public()
 
@@ -172,8 +177,8 @@ def list_jobs() -> dict[str, Any]:
 
 @app.get("/api/jobs/{job_id}")
 def get_job(job_id: str) -> dict[str, Any]:
-    from fastapi import HTTPException
     job = _service.get_job(job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="job not found")
     return job.public()
+"
