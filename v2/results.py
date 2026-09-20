@@ -105,6 +105,13 @@ class ResultStore:
             self._persist()
             return record
 
+    def update_summary(self, result_id: str, summary: Any) -> ResultRecord:
+        with self._lock:
+            record = self._results[result_id]
+            record.summary = summary
+            self._persist()
+            return record
+
     def fail(self, result_id: str, summary: Any = None) -> ResultRecord:
         with self._lock:
             record = self._results[result_id]
