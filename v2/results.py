@@ -38,7 +38,8 @@ class ResultRecord:
 
 
 class ResultStore:
-    def __init__(self, state_path: Path | None = None):
+    def __init__(self, state_path: Path | None = None, evidence_store: Any | None = None):
+        self.evidence_store = evidence_store
         self.state_path = state_path or (
             Path(__file__).resolve().parent / "runtime" / "results.json"
         )
