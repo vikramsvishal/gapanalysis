@@ -140,6 +140,8 @@ class JobManager:
             )
             if result_record is not None:
                 self.result_store.complete(result_record.result_id, _safe_summary(result), evidence_ids=[], exception_ids=[])
+            if result_record is not None:
+                self.result_store.complete(result_record.result_id, _safe_summary(result), evidence_ids=[], exception_ids=[])
         except Exception as exc:  # job failures must be visible, not crash the API
             self._update(
                 job_id,
@@ -149,5 +151,7 @@ class JobManager:
                 completed_at=_now(),
                 error=f"{type(exc).__name__}: {exc}",
             )
+            if result_record is not None:
+                self.result_store.fail(result_record.result_id, {"error": f"{type(exc).__name__}: {exc}"})
             if result_record is not None:
                 self.result_store.fail(result_record.result_id, {"error": f"{type(exc).__name__}: {exc}"})
