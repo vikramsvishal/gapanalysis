@@ -83,6 +83,16 @@ RESOURCE_TYPES = {
         "description": "Optional field intelligence workbook containing Field List and Field Mapping sheets.",
         "extensions": [".xlsx", ".xlsm"],
     },
+    "nw_load_to_is": {
+        "label": "NW Load To IS Candidate File",
+        "description": "Network reconciliation Load To IS candidate population selected for controlled OS loading.",
+        "extensions": [".csv", ".xlsx", ".xlsm", ".xlsb"],
+    },
+    "server_load_to_is": {
+        "label": "Server Load To IS Candidate File",
+        "description": "Server reconciliation Load To IS candidate population selected for controlled OS loading.",
+        "extensions": [".csv", ".xlsx", ".xlsm", ".xlsb"],
+    },
     "bulk_template": {
         "label": "Bulk Load Template",
         "description": "IS bulk-load template used when generating controlled load files.",
@@ -96,6 +106,8 @@ OPERATION_REQUIREMENTS = {
     "reconcile_server": ["server_cmdb", "is_os", "catalog_os"],
     "run_hardware_governance_network": ["nw_cmdb", "is_network_category", "catalog_network"],
     "run_hardware_governance_server": ["server_cmdb", "is_server_category", "catalog_server"],
+    "generate_bulk_load_network": ["nw_load_to_is", "is_os", "bulk_template", "is_network_category"],
+    "generate_bulk_load_server": ["server_load_to_is", "is_os", "bulk_template", "is_server_category"],
 }
 
 
