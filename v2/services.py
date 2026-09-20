@@ -19,9 +19,10 @@ class GovernanceService:
         payload = payload or {}
         resources = payload.get("resources") or {}
         requirement_operation = operation
-        if operation == "run_hardware_governance":
+        if operation in {"run_hardware_governance", "generate_bulk_load"}:
             domain = payload.get("domain")
-            requirement_operation = f"run_hardware_governance_{domain}" if domain in {"network", "server"} else operation
+            prefix = "run_hardware_governance" if operation == "run_hardware_governance" else "generate_bulk_load"
+            requirement_operation = f"{prefix}_{domain}" if domain in {"network", "server"} else operation
         result = self.resources.resolve_requirements(requirement_operation, resources)
         return {"operation": operation, "ready": result["ready"], "required": result["required"], "missing": result["missing"]}
 
@@ -88,6 +89,30 @@ class GovernanceService:
                 self._record(payload, catalog_kind).stored_path,
                 str(self.output_dir), progress,
             )
+        if operation == "generate_bulk_load":
+            domain = payload.get("domain")
+            if domain not in {"network", "server"}:
+                raise ValueError("OS Bulk Load Governance requires domain=network or domain=server")
+            load_kind = "nw_load_to_is" if domain == "network" else "server_load_to_is"
+            category_kind = "is_network_category" if domain == "network" else "is_server_category"
+            load_df = self.engine.read_load_to_is_file(self._record(payload, load_kind).stored_path, domain, progress)
+            governance = self.engine.category_decisions_from_load(domain, load_df, self._record(payload, category_kind).stored_path, progress)
+            include_missing_fqdn = bool(payload.get("include_missing_fqdn", False))
+            missing_fqdn_count = sum(1 for _, row in load_df.iterrows() if not self.engine.valid_fqdn(row.get("Fully qualified domain name", "")))
+            if missing_fqdn_count and "include_missing_fqdn" not in payload:
+                raise ValueError(f"{missing_fqdn_count} candidates have no valid FQDN; explicit human decision is required")
+            fmt = str(payload.get("format", "xlsx")).lower()
+            if fmt not in {"xlsx", "csv"}:
+                raise ValueError("OS Bulk Load output format must be xlsx or csv")
+            outputs = self.engine.generate_bulk_load(
+                load_df, domain, self._record(payload, "is_os").stored_path,
+                self._record(payload, "bulk_template").stored_path, str(self.output_dir), fmt,
+                lambda _count: include_missing_fqdn, lambda _count: True, progress, governance,
+            )
+            return {"domain": domain, "candidate_count": len(load_df), "missing_fqdn_count": missing_fqdn_count,
+                    "include_missing_fqdn": include_missing_fqdn,
+                    "governance_summary": {"decisions": len(governance["decisions"]), "category_load_candidates": len(governance.get("category_load", []))},
+                    "outputs": outputs}
         raise ValueError(f"Resource-backed execution is not implemented for: {operation}")
 
     def _dispatch(self, operation: str, kwargs: dict[str, Any]):
@@ -111,7 +136,19 @@ class GovernanceService:
     def run_hardware_governance(self,*args,**kwargs): return self.engine.run_hardware_governance(*args,**kwargs)
     def generate_bulk_load(self,*args,**kwargs): return self.engine.generate_bulk_load(*args,**kwargs)
     def category_decisions_from_load(self,*args,**kwargs): return self.engine.category_decisions_from_load(*args,**kwargs)
-    def normalize(self,value:Any)->str: return self.engine.clean(value)
+    def bulk_preflight(self, domain: str, payload: dict[str, Any]) -> dict[str, Any]:
+        check = self.preflight("generate_bulk_load", {"domain": domain, "resources": payload.get("resources") or {}})
+        if not check["ready"]:
+            return {**check, "candidate_count": None, "missing_fqdn_count": None, "blocked_category_candidates": None}
+        load_kind = "nw_load_to_is" if domain == "network" else "server_load_to_is"
+        category_kind = "is_network_category" if domain == "network" else "is_server_category"
+        load_df = self.engine.read_load_to_is_file(self._record({"resources": payload.get("resources") or {}}, load_kind).stored_path, domain)
+        decisions = self.engine.category_decisions_from_load(domain, load_df, self._record({"resources": payload.get("resources") or {}}, category_kind).stored_path)
+        blocked = int(decisions["decisions"]["Recommended Action"].isin(["CATEGORY DATA QUALITY REVIEW", "NO LOAD ACTION"]).sum()) if not decisions["decisions"].empty and "Recommended Action" in decisions["decisions"].columns else 0
+        missing_fqdn = sum(1 for _, row in load_df.iterrows() if not self.engine.valid_fqdn(row.get("Fully qualified domain name", "")))
+        return {**check, "candidate_count": len(load_df), "missing_fqdn_count": missing_fqdn, "blocked_category_candidates": blocked, "ready_for_review": blocked == 0}
+
+    def normalize(self,value:Any)->str: return self.engine.clean
     def normalize_fqdn(self,value:Any)->str: return self.engine.normalize_fqdn(value)
     def validate_fqdn(self,value:Any)->str: return self.engine.valid_fqdn(value)
     def normalize_ipv4(self,value:Any): return self.engine.normalize_ipv4(value)
