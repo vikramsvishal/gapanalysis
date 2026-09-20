@@ -29,6 +29,9 @@ class ExceptionRecord:
     status: str = "OPEN"
     recommendation: str = ""
     evidence_ids: list[str] = field(default_factory=list)
+    candidate_id: str | None = None
+    candidate: dict[str, Any] = field(default_factory=dict)
+    decision: str | None = None
     created_at: str = field(default_factory=_now)
     resolved_at: str | None = None
     resolved_by: str | None = None
@@ -50,6 +53,11 @@ class ExceptionStore:
             return
         try:
             for item in json.loads(self.state_path.read_text(encoding="utf-8")):
+                # Backward compatible with exception records created before
+                # candidate-level approval was introduced.
+                item.setdefault("candidate_id", None)
+                item.setdefault("candidate", {})
+                item.setdefault("decision", None)
                 record = ExceptionRecord(**item)
                 self._items[record.exception_id] = record
         except (OSError, ValueError, TypeError):
@@ -58,7 +66,7 @@ class ExceptionStore:
     def _persist(self) -> None:
         self.state_path.parent.mkdir(parents=True, exist_ok=True)
         tmp = self.state_path.with_suffix(".tmp")
-        tmp.write_text(json.dumps([x.public() for x in self._items.values()], indent=2), encoding="utf-8")
+        tmp.write_text(json.dumps([x.public() for x in self._items.values()], indent=2, default=str), encoding="utf-8")
         tmp.replace(self.state_path)
 
     def create(
@@ -71,6 +79,8 @@ class ExceptionStore:
         severity: str = "REVIEW",
         recommendation: str = "",
         evidence_ids: list[str] | None = None,
+        candidate_id: str | None = None,
+        candidate: dict[str, Any] | None = None,
     ) -> ExceptionRecord:
         record = ExceptionRecord(
             exception_id="EXC-" + uuid.uuid4().hex[:12].upper(),
@@ -81,16 +91,22 @@ class ExceptionStore:
             severity=severity,
             recommendation=recommendation,
             evidence_ids=list(evidence_ids or []),
+            candidate_id=candidate_id,
+            candidate=dict(candidate or {}),
         )
         with self._lock:
             self._items[record.exception_id] = record
             self._persist()
         return record
 
-    def resolve(self, exception_id: str, actor: str, resolution: str) -> ExceptionRecord:
+    def resolve(self, exception_id: str, actor: str, resolution: str, decision: str = "APPROVE") -> ExceptionRecord:
+        decision = str(decision).upper()
+        if decision not in {"APPROVE", "REJECT"}:
+            raise ValueError("decision must be APPROVE or REJECT")
         with self._lock:
             record = self._items[exception_id]
             record.status = "RESOLVED"
+            record.decision = decision
             record.resolved_at = _now()
             record.resolved_by = actor
             record.resolution = resolution
