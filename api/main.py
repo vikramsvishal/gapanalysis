@@ -175,6 +175,27 @@ def list_jobs() -> dict[str, Any]:
     return {"items": [job.public() for job in _service.list_jobs()]}
 
 
+@app.get("/api/evidence")
+def list_evidence() -> dict[str, Any]:
+    return {"items": [item.public() for item in _service.list_evidence()]}
+
+
+@app.get("/api/evidence/{evidence_id}")
+def get_evidence(evidence_id: str) -> dict[str, Any]:
+    item = _service.get_evidence(evidence_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="evidence not found")
+    return item.public()
+
+
+@app.get("/api/results/{result_id}/evidence")
+def result_evidence(result_id: str) -> dict[str, Any]:
+    result = _service.get_result(result_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail="result not found")
+    return {"items": [item.public() for item in _service.result_evidence(result_id)]}
+
+
 @app.get("/api/results")
 def list_results() -> dict[str, Any]:
     return {"items": [result.public() for result in _service.list_results()]}
