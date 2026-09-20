@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from .agents import AgentRegistry, default_registry
 from .jobs import JobManager
 from .services import GovernanceService
+from .results import ResultStore
 
 
 @dataclass
@@ -14,11 +15,13 @@ class ApplicationService:
     agents: AgentRegistry | None = None
     governance: GovernanceService | None = None
     jobs: JobManager | None = None
+    results: ResultStore | None = None
 
     def __post_init__(self):
         self.governance = self.governance or GovernanceService()
         self.agents = self.agents or default_registry()
-        self.jobs = self.jobs or JobManager(self.governance)
+        self.results = self.results or ResultStore()
+        self.jobs = self.jobs or JobManager(self.governance, result_store=self.results)
 
     @property
     def version(self) -> str:
@@ -42,3 +45,12 @@ class ApplicationService:
 
     def list_jobs(self):
         return self.jobs.list()
+
+    def get_result(self, result_id: str):
+        return self.results.get(result_id)
+
+    def get_job_result(self, job_id: str):
+        return self.results.for_job(job_id)
+
+    def list_results(self):
+        return self.results.list()
