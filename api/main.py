@@ -225,12 +225,48 @@ def result_exceptions(result_id: str) -> dict[str, Any]:
 def resolve_exception(exception_id: str, request: dict[str, Any]) -> dict[str, Any]:
     actor = request.get("actor") or "local-user"
     resolution = request.get("resolution")
+    decision = request.get("decision") or "APPROVE"
     if not resolution:
         raise HTTPException(status_code=400, detail="resolution is required")
     try:
-        return _service.resolve_exception(exception_id, actor, resolution).public()
+        return _service.resolve_exception(exception_id, actor, resolution, decision).public()
     except KeyError:
         raise HTTPException(status_code=404, detail="exception not found")
+
+
+@app.get("/api/approvals")
+def list_approvals() -> dict[str, Any]:
+    return {"items": [item.public() for item in _service.list_approvals()]}
+
+
+@app.get("/api/approvals/{approval_id}")
+def get_approval(approval_id: str) -> dict[str, Any]:
+    item = _service.get_approval(approval_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="approval package not found")
+    return item.public()
+
+
+@app.get("/api/results/{result_id}/approval")
+def result_approval(result_id: str) -> dict[str, Any]:
+    result = _service.get_result(result_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail="result not found")
+    item = _service.result_approval(result_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="approval package not found for result")
+    return item.public()
+
+
+@app.post("/api/approvals/{approval_id}/finalize")
+def finalize_approval(approval_id: str, request: dict[str, Any]) -> dict[str, Any]:
+    actor = request.get("actor") or "local-user"
+    try:
+        return _service.finalize_bulk_load(approval_id, actor).public()
+    except KeyError:
+        raise HTTPException(status_code=404, detail="approval package not found")
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
 
 
 @app.get("/api/evidence")
