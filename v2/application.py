@@ -7,6 +7,7 @@ from .jobs import JobManager
 from .services import GovernanceService
 from .results import ResultStore
 from .evidence import EvidenceStore
+from .exceptions import ExceptionStore
 
 
 @dataclass
@@ -18,11 +19,13 @@ class ApplicationService:
     jobs: JobManager | None = None
     results: ResultStore | None = None
     evidence: EvidenceStore | None = None
+    exceptions: ExceptionStore | None = None
 
     def __post_init__(self):
         self.governance = self.governance or GovernanceService()
         self.agents = self.agents or default_registry()
         self.evidence = self.evidence or EvidenceStore()
+        self.exceptions = self.exceptions or ExceptionStore()
         self.results = self.results or ResultStore(evidence_store=self.evidence)
         if getattr(self.results, "evidence_store", None) is None:
             self.results.evidence_store = self.evidence
@@ -68,3 +71,15 @@ class ApplicationService:
 
     def list_evidence(self):
         return self.evidence.list()
+
+    def get_exception(self, exception_id: str):
+        return self.exceptions.get(exception_id)
+
+    def result_exceptions(self, result_id: str):
+        return self.exceptions.for_result(result_id)
+
+    def list_exceptions(self):
+        return self.exceptions.list()
+
+    def resolve_exception(self, exception_id: str, actor: str, resolution: str):
+        return self.exceptions.resolve(exception_id, actor, resolution)
