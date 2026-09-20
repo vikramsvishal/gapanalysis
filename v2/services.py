@@ -109,9 +109,33 @@ class GovernanceService:
                 self._record(payload, "bulk_template").stored_path, str(self.output_dir), fmt,
                 lambda _count: include_missing_fqdn, lambda _count: True, progress, governance,
             )
+            decisions = governance.get("decisions")
+            exception_candidates = []
+            if decisions is not None and not decisions.empty and "Recommended Action" in decisions.columns:
+                blocked = decisions[decisions["Recommended Action"].isin(
+                    ["CATEGORY DATA QUALITY REVIEW", "NO LOAD ACTION"]
+                )]
+                for idx, row in blocked.head(500).iterrows():
+                    exception_candidates.append({
+                        "code": "OS_LOAD_CATEGORY_REVIEW",
+                        "title": "OS bulk-load candidate requires category review",
+                        "description": f"{domain} candidate requires human category/governance review before controlled loading. Row={idx}; action={row.get('Recommended Action')}",
+                        "recommendation": "Review the authoritative category decision and resolve before production loading.",
+                        "severity": "REVIEW",
+                        "candidate": {str(k): str(v) for k, v in row.items() if k != "Recommended Action"},
+                    })
+            if missing_fqdn_count:
+                exception_candidates.append({
+                    "code": "OS_LOAD_FQDN_REVIEW",
+                    "title": "OS bulk-load candidates have missing or invalid FQDN",
+                    "description": f"{missing_fqdn_count} {domain} candidates have missing or invalid FQDN values.",
+                    "recommendation": "Human review is required before allowing the V1.4.1 FQDN policy to generate or accept a load value.",
+                    "severity": "REVIEW",
+                })
             return {"domain": domain, "candidate_count": len(load_df), "missing_fqdn_count": missing_fqdn_count,
                     "include_missing_fqdn": include_missing_fqdn,
                     "governance_summary": {"decisions": len(governance["decisions"]), "category_load_candidates": len(governance.get("category_load", []))},
+                    "exception_candidates": exception_candidates,
                     "outputs": outputs}
         raise ValueError(f"Resource-backed execution is not implemented for: {operation}")
 
