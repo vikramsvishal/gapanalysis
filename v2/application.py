@@ -6,6 +6,7 @@ from .agents import AgentRegistry, default_registry
 from .jobs import JobManager
 from .services import GovernanceService
 from .results import ResultStore
+from .evidence import EvidenceStore
 
 
 @dataclass
@@ -16,11 +17,13 @@ class ApplicationService:
     governance: GovernanceService | None = None
     jobs: JobManager | None = None
     results: ResultStore | None = None
+    evidence: EvidenceStore | None = None
 
     def __post_init__(self):
         self.governance = self.governance or GovernanceService()
         self.agents = self.agents or default_registry()
         self.results = self.results or ResultStore()
+        self.evidence = self.evidence or EvidenceStore()
         self.jobs = self.jobs or JobManager(self.governance, result_store=self.results)
 
     @property
@@ -54,3 +57,12 @@ class ApplicationService:
 
     def list_results(self):
         return self.results.list()
+
+    def get_evidence(self, evidence_id: str):
+        return self.evidence.get(evidence_id)
+
+    def result_evidence(self, result_id: str):
+        return self.evidence.for_result(result_id)
+
+    def list_evidence(self):
+        return self.evidence.list()
