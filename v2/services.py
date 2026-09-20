@@ -222,11 +222,16 @@ class GovernanceService:
         if approved_df.empty:
             raise ValueError("No candidates remain approved for the controlled load package")
 
+        # Re-evaluate governance against exactly the approved candidate set so
+        # the golden generator receives a decision frame aligned to its input.
+        approved_governance = self.engine.category_decisions_from_load(
+            approval.domain, approved_df, self._record(payload, category_kind).stored_path
+        )
         fmt = "xlsx"
         outputs = self.engine.generate_bulk_load(
             approved_df, approval.domain, self._record(payload, "is_os").stored_path,
             self._record(payload, "bulk_template").stored_path, str(self.output_dir), fmt,
-            lambda _count: True, lambda _count: True, lambda message, percent=0: None, governance,
+            lambda _count: True, lambda _count: True, lambda message, percent=0: None, approved_governance,
         )
         return {
             "status": "LOAD_PACKAGE_GENERATED",
