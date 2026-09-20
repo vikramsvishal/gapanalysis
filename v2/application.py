@@ -112,6 +112,14 @@ class ApplicationService:
             raise KeyError(approval_id)
         exceptions = self.exceptions.for_result(approval.result_id)
         result = self.governance.finalize_bulk_load(approval, exceptions, actor)
+        self.results.update_summary(
+            approval.result_id,
+            {
+                "status": result.get("status"),
+                "approval_id": approval_id,
+                "finalization": result,
+            },
+        )
         finalized = self.approvals.finalize(approval_id, actor, result)
         self.audit.append(
             "APPROVAL", actor, "APPROVAL", approval_id, "FINALIZED",
