@@ -175,6 +175,39 @@ def list_jobs() -> dict[str, Any]:
     return {"items": [job.public() for job in _service.list_jobs()]}
 
 
+@app.get("/api/exceptions")
+def list_exceptions() -> dict[str, Any]:
+    return {"items": [item.public() for item in _service.list_exceptions()]}
+
+
+@app.get("/api/exceptions/{exception_id}")
+def get_exception(exception_id: str) -> dict[str, Any]:
+    item = _service.get_exception(exception_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="exception not found")
+    return item.public()
+
+
+@app.get("/api/results/{result_id}/exceptions")
+def result_exceptions(result_id: str) -> dict[str, Any]:
+    result = _service.get_result(result_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail="result not found")
+    return {"items": [item.public() for item in _service.result_exceptions(result_id)]}
+
+
+@app.post("/api/exceptions/{exception_id}/resolve")
+def resolve_exception(exception_id: str, request: dict[str, Any]) -> dict[str, Any]:
+    actor = request.get("actor") or "local-user"
+    resolution = request.get("resolution")
+    if not resolution:
+        raise HTTPException(status_code=400, detail="resolution is required")
+    try:
+        return _service.resolve_exception(exception_id, actor, resolution).public()
+    except KeyError:
+        raise HTTPException(status_code=404, detail="exception not found")
+
+
 @app.get("/api/evidence")
 def list_evidence() -> dict[str, Any]:
     return {"items": [item.public() for item in _service.list_evidence()]}
