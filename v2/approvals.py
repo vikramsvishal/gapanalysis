@@ -43,6 +43,9 @@ class ApprovalRecord:
     completed_at: str | None = None
     finalized_by: str | None = None
     final_result: dict[str, Any] | None = None
+    candidate_snapshot_sha256: str = ""
+    decision_snapshot_sha256: str = ""
+    output_sha256: dict[str, str] = field(default_factory=dict)
 
     def public(self) -> dict[str, Any]:
         return asdict(self)
@@ -79,6 +82,7 @@ class ApprovalStore:
         resource_inputs: dict[str, str],
         candidate_count: int,
         review_candidate_ids: list[str],
+        candidate_snapshot_sha256: str = "",
     ) -> ApprovalRecord:
         record = ApprovalRecord(
             approval_id="APR-" + uuid.uuid4().hex[:12].upper(),
@@ -89,6 +93,7 @@ class ApprovalStore:
             resource_inputs=dict(resource_inputs),
             candidate_count=int(candidate_count),
             review_candidate_ids=list(review_candidate_ids),
+            candidate_snapshot_sha256=candidate_snapshot_sha256,
         )
         with self._lock:
             self._items[record.approval_id] = record
@@ -108,12 +113,21 @@ class ApprovalStore:
         with self._lock:
             return sorted(self._items.values(), key=lambda x: x.created_at, reverse=True)
 
-    def finalize(self, approval_id: str, actor: str, final_result: dict[str, Any]) -> ApprovalRecord:
+    def finalize(
+        self,
+        approval_id: str,
+        actor: str,
+        final_result: dict[str, Any],
+        decision_snapshot_sha256: str = "",
+        output_sha256: dict[str, str] | None = None,
+    ) -> ApprovalRecord:
         with self._lock:
             record = self._items[approval_id]
             record.status = "FINALIZED"
             record.completed_at = _now()
             record.finalized_by = actor
             record.final_result = dict(final_result)
+            record.decision_snapshot_sha256 = decision_snapshot_sha256
+            record.output_sha256 = dict(output_sha256 or {})
             self._persist()
             return record
