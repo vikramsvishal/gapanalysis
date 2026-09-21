@@ -15,7 +15,25 @@ v2/
   legacy_adapter.py     Transitional access to V1.4.1 logic
   normalization.py      V2 facade over golden normalization behavior
   catalog.py            Deterministic authoritative catalog resolver
+  hardware_governance.py Stable hardware-governance service seam
+  catalog_matching.py   Extracted V1.4.1 hardware catalog matching engine
 ```
+
+## Hardware catalog matching extraction
+
+The current `HardwareCatalogMatcher` is intentionally behavior-preserving. It extracts the V1.4.1 `_hw_index()` and `hardware_match()` behavior into a deterministic, independently testable component.
+
+The extracted engine currently preserves:
+
+- indexed hardware-model matching
+- server manufacturer + model matching
+- model-only matching
+- legacy composite-index behavior
+- token-overlap candidate matching
+- ambiguity detection
+- V1.4.1 status/detail/score values
+
+It is **not yet the governance authority**. The protected V1.4.1 engine remains authoritative for end-to-end hardware governance until the full domain is regression-covered. The next extraction step is to separate catalog identity resolution from category presence/governance decisions and then introduce an explicit authoritative-catalog resolution contract.
 
 ## Migration strategy
 
@@ -37,7 +55,6 @@ v2/
 - FQDN requirements remain policy-driven and human-in-the-loop where required.
 - Source evidence, normalized evidence, current IS state, required value and load value remain separate concepts.
 
-
 ## Enterprise UI
 
-The V2 branch now includes a React + Vite enterprise UI under `web/`. The UI is intentionally an application shell over the governance engine, not a second implementation of business rules. Current screens cover the portal shell, governance overview, reconciliation workspace, governance decisions, jobs, exceptions and audit/evidence areas. The HTTP API seam is defined separately so real execution can be wired without moving governance logic into the browser.
+The V2 branch includes a React + Vite enterprise UI under `web/`. The UI is intentionally an application shell over the governance engine, not a second implementation of business rules. Current screens cover the portal shell, governance overview, reconciliation workspace, governance decisions, jobs, exceptions and audit/evidence areas. The HTTP API seam is defined separately so real execution can be wired without moving governance logic into the browser.
