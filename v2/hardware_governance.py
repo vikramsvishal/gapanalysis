@@ -12,6 +12,8 @@ from typing import Any, Callable
 import pandas as pd
 
 from .catalog_resolution import AuthoritativeHardwareCatalogResolver, CatalogResolutionRequest
+from .category_governance import CategoryDependencyGovernance
+from .legacy_adapter import load_golden
 
 
 @dataclass(frozen=True)
@@ -50,6 +52,12 @@ class HardwareGovernanceService:
 
     def __init__(self, engine: Any):
         self.engine = engine
+
+    def resolve_category_dependency(self, domain: str, serial_number: str, category):
+        """Resolve category presence independently from hardware identity matching."""
+        golden = load_golden()
+        governance = CategoryDependencyGovernance(golden.lifecycle, golden.serial_key)
+        return governance.evaluate(domain, serial_number, category)
 
     def resolve_catalog_identity(
         self,
