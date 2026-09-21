@@ -33,7 +33,14 @@ The extracted engine currently preserves:
 - ambiguity detection
 - V1.4.1 status/detail/score values
 
-It is **not yet the governance authority**. The protected V1.4.1 engine remains authoritative for end-to-end hardware governance until the full domain is regression-covered. The next extraction step is to separate catalog identity resolution from category presence/governance decisions and then introduce an explicit authoritative-catalog resolution contract.
+It is **not yet the governance authority**. The protected V1.4.1 engine remains authoritative for end-to-end hardware governance until the full domain is regression-covered. The catalog identity resolution seam is now explicit through `AuthoritativeHardwareCatalogResolver`. It consumes matcher candidates but enforces the governance distinction between candidate identity and authorized catalog value:
+
+- exact catalog identity can be load-authorized;
+- partial/similarity candidates remain review-only;
+- ambiguous candidates remain blocked/review-only;
+- no-match conditions remain catalog-update-required.
+
+The resolver is exposed by `HardwareGovernanceService.resolve_catalog_identity()`, but the protected V1.4.1 end-to-end hardware workflow still remains the execution oracle. The next extraction step is category presence/dependency governance, followed by shadow equivalence against V1.4.1 before any execution path is switched.
 
 ## Migration strategy
 
