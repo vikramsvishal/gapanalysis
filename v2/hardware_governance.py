@@ -9,6 +9,10 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
+import pandas as pd
+
+from .catalog_resolution import AuthoritativeHardwareCatalogResolver, CatalogResolutionRequest
+
 
 @dataclass(frozen=True)
 class HardwareGovernanceRequest:
@@ -46,6 +50,25 @@ class HardwareGovernanceService:
 
     def __init__(self, engine: Any):
         self.engine = engine
+
+    def resolve_catalog_identity(
+        self,
+        catalog: pd.DataFrame,
+        manufacturer: str,
+        model: str,
+        source_reference: str = "",
+        domain: str = "network",
+    ):
+        """Resolve a hardware identity without making a governance/load decision."""
+        resolver = AuthoritativeHardwareCatalogResolver(catalog)
+        return resolver.resolve(
+            CatalogResolutionRequest(
+                domain=domain,
+                manufacturer=manufacturer,
+                model=model,
+                source_reference=source_reference,
+            )
+        )
 
     def execute(
         self,
