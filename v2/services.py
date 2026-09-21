@@ -7,6 +7,7 @@ from typing import Any
 from .legacy_adapter import load_golden
 from .resources import ResourceManager
 from .approvals import candidate_id
+from .hardware_governance import HardwareGovernanceRequest, HardwareGovernanceService
 
 
 class GovernanceService:
@@ -15,6 +16,7 @@ class GovernanceService:
         self.resources = resources or ResourceManager()
         self.output_dir = Path(__file__).resolve().parent / "runtime" / "outputs"
         self.output_dir.mkdir(parents=True, exist_ok=True)
+        self.hardware_governance = HardwareGovernanceService(self.engine)
 
     def preflight(self, operation: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
         payload = payload or {}
@@ -84,12 +86,17 @@ class GovernanceService:
             cmdb_kind = "nw_cmdb" if domain == "network" else "server_cmdb"
             category_kind = "is_network_category" if domain == "network" else "is_server_category"
             catalog_kind = "catalog_network" if domain == "network" else "catalog_server"
-            return self.engine.run_hardware_governance(
-                domain, self._record(payload, cmdb_kind).stored_path,
-                self._record(payload, category_kind).stored_path,
-                self._record(payload, catalog_kind).stored_path,
-                str(self.output_dir), progress,
-            )
+            return self.hardware_governance.execute(
+                HardwareGovernanceRequest(
+                    domain=domain,
+                    cmdb_path=self._record(payload, cmdb_kind).stored_path,
+                    category_path=self._record(payload, category_kind).stored_path,
+                    catalog_path=self._record(payload, catalog_kind).stored_path,
+                    output_dir=str(self.output_dir),
+                    write_outputs=True,
+                ),
+                progress,
+            ).__dict__
         if operation == "generate_bulk_load":
             domain = payload.get("domain")
             if domain not in {"network", "server"}:
