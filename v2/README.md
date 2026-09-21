@@ -65,3 +65,17 @@ The resolver is exposed by `HardwareGovernanceService.resolve_catalog_identity()
 ## Enterprise UI
 
 The V2 branch includes a React + Vite enterprise UI under `web/`. The UI is intentionally an application shell over the governance engine, not a second implementation of business rules. Current screens cover the portal shell, governance overview, reconciliation workspace, governance decisions, jobs, exceptions and audit/evidence areas. The HTTP API seam is defined separately so real execution can be wired without moving governance logic into the browser.
+
+
+## Category dependency governance seam
+
+Hardware governance now exposes category presence/dependency as an independent deterministic service through `CategoryDependencyGovernance` and `HardwareGovernanceService.resolve_category_dependency()`.
+
+The current V1.4.1 outcomes are represented explicitly:
+
+- existing operational/production category → `LOAD OS ONLY`
+- missing category → `LOAD CATEGORY AND OS`
+- duplicate normalized category serial → `CATEGORY DATA QUALITY REVIEW`
+- non-operational category does not satisfy the parent dependency
+
+This seam is currently additive and regression-tested. The protected V1.4.1 end-to-end hardware workflow remains authoritative. The next step is a shadow composition of catalog resolution + category dependency + lifecycle/load eligibility, followed by equivalence testing against the full V1.4.1 hardware decisions.
