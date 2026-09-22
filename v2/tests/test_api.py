@@ -77,6 +77,9 @@ def test_result_shadow_endpoint_exposes_persisted_diagnostics(monkeypatch):
     assert data["mismatch_count"] == 2
     assert data["mismatch_percentage"] == 20.0
     assert data["evidence_ids"] == ["EVD-1"]
+    assert data["divergence_by_field"][0]["field"] == "recommended_action"
+    assert data["divergence_by_field"][0]["divergence_count"] == 1
+    assert data["divergence_by_field"][0]["examples"][0]["serial_number"] == "SN3"
 
 
 def test_result_shadow_endpoint_returns_404_when_shadow_is_unavailable(monkeypatch):
