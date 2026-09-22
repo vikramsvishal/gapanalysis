@@ -206,5 +206,17 @@ def test_shadow_non_exact_catalog_is_explicitly_divergent(tmp_path):
     expected = golden_decision_projection(golden["decisions"].iloc[0].to_dict())
     actual = _v2_shadow_projection("network", category, catalog)
     assert expected["recommended_action"] == "LOAD OS ONLY"
+    assert actual["recommended_action"] == "CATEGORY DATA QUALITY REVIEW"
+    assert expected["recommended_action"] != actual["recommended_action"]
+
+
+def test_shadow_no_catalog_match_is_explicitly_divergent(tmp_path):
+    category = _category([_category_row()])
+    catalog = _catalog(model="ASR-1001", opaque="HW-3")
+    golden = _golden("network", tmp_path, category, catalog=catalog)
+    expected = golden_decision_projection(golden["decisions"].iloc[0].to_dict())
+    actual = _v2_shadow_projection("network", category, catalog)
+
+    assert expected["recommended_action"] == "LOAD OS ONLY"
     assert actual["recommended_action"] == "CATALOG UPDATE REQUIRED"
     assert expected["recommended_action"] != actual["recommended_action"]
