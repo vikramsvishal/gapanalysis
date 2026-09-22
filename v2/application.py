@@ -76,6 +76,24 @@ class ApplicationService:
         shadow = result.summary.get("shadow")
         if not isinstance(shadow, dict) or not shadow.get("enabled"):
             return None
+        mismatches = shadow.get("mismatches", [])
+        by_field: dict[str, dict[str, object]] = {}
+        for mismatch in mismatches:
+            for field, difference in (mismatch.get("differences") or {}).items():
+                bucket = by_field.setdefault(field, {"field": field, "divergence_count": 0, "examples": []})
+                bucket["divergence_count"] = int(bucket["divergence_count"]) + 1
+                examples = bucket["examples"]
+                if isinstance(examples, list) and len(examples) < 5:
+                    examples.append({
+                        "row_index": mismatch.get("row_index"),
+                        "serial_number": mismatch.get("serial_number", ""),
+                        "golden": difference.get("golden"),
+                        "v2": difference.get("v2"),
+                    })
+        divergence_by_field = sorted(
+            by_field.values(),
+            key=lambda item: (-int(item["divergence_count"]), str(item["field"])),
+        )
         return {
             "result_id": result_id,
             "authoritative_engine": shadow.get("authoritative_engine", "V1.4.1"),
@@ -86,7 +104,8 @@ class ApplicationService:
                 round((shadow.get("mismatch_count", 0) / shadow.get("row_count", 0)) * 100, 2)
                 if shadow.get("row_count") else 0.0
             ),
-            "mismatches": shadow.get("mismatches", []),
+            "divergence_by_field": divergence_by_field,
+            "mismatches": mismatches,
             "evidence_ids": result.evidence_ids,
         }
 
