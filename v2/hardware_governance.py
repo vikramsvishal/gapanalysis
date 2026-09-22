@@ -15,6 +15,7 @@ import pandas as pd
 from .catalog_resolution import AuthoritativeHardwareCatalogResolver, CatalogResolutionRequest
 from .category_governance import CategoryDependencyGovernance
 from .hardware_decision import HardwareGovernanceDecisionComposer, HardwareGovernanceSignals
+from .hardware_equivalence import v2_decision_projection
 from .legacy_adapter import load_golden
 
 
