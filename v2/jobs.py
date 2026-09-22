@@ -145,6 +145,31 @@ class JobManager:
                 job_id, progress=max(1, min(99, int(percent))), message=str(message)
             )
             result = self.service.execute_operation(operation, payload, progress=progress)
+            shadow = result.get("shadow") if isinstance(result, dict) else None
+            shadow_evidence = None
+            if result_record is not None and shadow and shadow.get("enabled"):
+                shadow_payload = json.dumps(shadow, sort_keys=True, separators=(",", ":"), default=str)
+                shadow_evidence = self.result_store.evidence_store.capture_text(
+                    result_record.result_id,
+                    "HARDWARE_GOVERNANCE_SHADOW",
+                    result_record.result_id,
+                    result_record.result_id + "-hardware-shadow.json",
+                    shadow_payload,
+                ) if getattr(self.result_store, "evidence_store", None) is not None else None
+                if shadow_evidence is not None:
+                    evidence_records.append(shadow_evidence)
+                if self.audit_store is not None:
+                    self.audit_store.append(
+                        "SHADOW_ANALYSIS", self._jobs[job_id].actor, "RESULT",
+                        result_record.result_id, "COMPLETED",
+                        {
+                            "authoritative_engine": shadow.get("authoritative_engine"),
+                            "row_count": shadow.get("row_count"),
+                            "match_count": shadow.get("match_count"),
+                            "mismatch_count": shadow.get("mismatch_count"),
+                            "evidence_id": shadow_evidence.evidence_id if shadow_evidence else None,
+                        },
+                    )
             exception_ids = []
             candidates = result.get("exception_candidates", []) if isinstance(result, dict) else []
             if result_record is not None and self.exception_store is not None:
