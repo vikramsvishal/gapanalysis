@@ -86,3 +86,8 @@ This seam is currently additive and regression-tested. The protected V1.4.1 end-
 The category-dependency and authoritative catalog seams are now composed through `HardwareGovernanceDecisionComposer`. The composer consumes already-resolved signals and produces the stable `GovernanceDecision` contract.
 
 Decision precedence is explicit: out-of-scope/non-operational records are no-action; no authoritative catalog match requires catalog update; ambiguous catalog identity requires review; duplicate category dependency requires review; missing category produces category-plus-OS load; an existing production category produces OS-only load. This is additive and test-protected; V1.4.1 remains the execution oracle until shadow equivalence is complete.
+
+
+## Hardware governance shadow equivalence
+
+A comparison seam now projects the protected V1.4.1 hardware decision fields and the V2 composed decision into a common shape. The current tests cover existing-category, missing-category, and duplicate-category outcomes. This remains a shadow harness: it does not alter V1.4.1 execution.
