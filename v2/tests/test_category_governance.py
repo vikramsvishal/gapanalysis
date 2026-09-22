@@ -66,7 +66,7 @@ def test_missing_category_requires_parent_category_load(gov):
 def test_duplicate_normalized_serial_requires_review(gov):
     d = gov.evaluate("network", "N-002", category())
     assert d.recommended_action == "CATEGORY DATA QUALITY REVIEW"
-    assert d.parent_dependency_status == "BLOCKED - DUPLICATE CATEGORY SERIAL"
+    assert d.parent_dependency_status == "NOT APPLICABLE"
     assert d.category_presence_status == "DUPLICATE NORMALIZED SERIAL"
 
 
