@@ -295,6 +295,17 @@ def list_results() -> dict[str, Any]:
     return {"items": [result.public() for result in _service.list_results()]}
 
 
+@app.get("/api/results/{result_id}/shadow")
+def result_shadow(result_id: str) -> dict[str, Any]:
+    result = _service.get_result(result_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail="result not found")
+    shadow = _service.get_shadow(result_id)
+    if shadow is None:
+        raise HTTPException(status_code=404, detail="shadow analysis not available for result")
+    return shadow
+
+
 @app.get("/api/results/{result_id}")
 def get_result(result_id: str) -> dict[str, Any]:
     result = _service.get_result(result_id)
