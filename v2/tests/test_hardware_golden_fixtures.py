@@ -1,6 +1,8 @@
 import pandas as pd
 
-from v2.hardware_equivalence import golden_decision_projection
+from v2.hardware_equivalence import golden_decision_projection, v2_decision_projection
+from v2.category_governance import CategoryDependencyGovernance
+from v2.catalog_resolution import AuthoritativeHardwareCatalogResolver, CatalogResolutionRequest
 
 
 def _catalog(model="C9300-48P", manufacturer="Cisco", opaque="HW-1"):
@@ -147,3 +149,62 @@ def test_golden_non_exact_catalog_does_not_override_category_recommendation(tmp_
 
     assert projection["catalog_status"] != "EXACT MATCH"
     assert projection["recommended_action"] == "LOAD OS ONLY"
+
+
+def _v2_shadow_projection(domain, category, catalog, model="C9300-48P", serial="SN001", lifecycle_stage="Operational"):
+    from v2.legacy_adapter import load_golden
+    golden = load_golden()
+    category_governance = CategoryDependencyGovernance(golden.lifecycle, golden.serial_key)
+    category_decision = category_governance.evaluate(domain, serial, category)
+    catalog_resolution = AuthoritativeHardwareCatalogResolver(catalog).resolve(
+        CatalogResolutionRequest(domain=domain, manufacturer="Cisco", model=model, source_reference="fixture")
+    )
+    return v2_decision_projection(
+        lifecycle_stage=golden.lifecycle(lifecycle_stage),
+        reconciliation_action="Load To IS",
+        catalog_status=catalog_resolution.status,
+        category=category_decision,
+    )
+
+def test_shadow_exact_existing_category_matches_golden(tmp_path):
+    category = _category([_category_row()])
+    catalog = _catalog()
+    golden = _golden("network", tmp_path, category, catalog=catalog)
+    expected = golden_decision_projection(golden["decisions"].iloc[0].to_dict())
+    actual = _v2_shadow_projection("network", category, catalog)
+    assert actual["catalog_status"] == expected["catalog_status"]
+    assert actual["category_presence_status"] == expected["category_presence_status"]
+    assert actual["recommended_action"] == expected["recommended_action"]
+    assert actual["parent_dependency_status"] == expected["parent_dependency_status"]
+
+def test_shadow_exact_missing_category_matches_golden(tmp_path):
+    category = _category([])
+    catalog = _catalog()
+    golden = _golden("network", tmp_path, category, catalog=catalog)
+    expected = golden_decision_projection(golden["decisions"].iloc[0].to_dict())
+    actual = _v2_shadow_projection("network", category, catalog)
+    assert actual["catalog_status"] == expected["catalog_status"]
+    assert actual["category_presence_status"] == expected["category_presence_status"]
+    assert actual["recommended_action"] == expected["recommended_action"]
+    assert actual["parent_dependency_status"] == expected["parent_dependency_status"]
+
+def test_shadow_exact_duplicate_category_matches_golden(tmp_path):
+    category = _category([_category_row("SN001", "CAT-1"), _category_row("SN001", "CAT-2")])
+    catalog = _catalog()
+    golden = _golden("network", tmp_path, category, catalog=catalog)
+    expected = golden_decision_projection(golden["decisions"].iloc[0].to_dict())
+    actual = _v2_shadow_projection("network", category, catalog)
+    assert actual["catalog_status"] == expected["catalog_status"]
+    assert actual["category_presence_status"] == expected["category_presence_status"]
+    assert actual["recommended_action"] == expected["recommended_action"]
+    assert actual["parent_dependency_status"] == expected["parent_dependency_status"]
+
+def test_shadow_non_exact_catalog_is_explicitly_divergent(tmp_path):
+    category = _category([_category_row()])
+    catalog = _catalog(model="C9300-48X", opaque="HW-2")
+    golden = _golden("network", tmp_path, category, catalog=catalog)
+    expected = golden_decision_projection(golden["decisions"].iloc[0].to_dict())
+    actual = _v2_shadow_projection("network", category, catalog)
+    assert expected["recommended_action"] == "LOAD OS ONLY"
+    assert actual["recommended_action"] == "CATALOG UPDATE REQUIRED"
+    assert expected["recommended_action"] != actual["recommended_action"]
