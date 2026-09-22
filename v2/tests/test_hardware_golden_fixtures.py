@@ -29,7 +29,8 @@ def _cmdb(lifecycle_stage="Operational", model="C9300-48P", serial="SN001", manu
 
 
 def _category(rows):
-    return pd.DataFrame(rows)
+    columns = list(_category_row().keys())
+    return pd.DataFrame(rows, columns=columns)
 
 
 def _reconciliation(serial="SN001"):
