@@ -13,6 +13,7 @@ import pandas as pd
 
 from .catalog_resolution import AuthoritativeHardwareCatalogResolver, CatalogResolutionRequest
 from .category_governance import CategoryDependencyGovernance
+from .hardware_decision import HardwareGovernanceDecisionComposer, HardwareGovernanceSignals
 from .legacy_adapter import load_golden
 
 
@@ -52,6 +53,10 @@ class HardwareGovernanceService:
 
     def __init__(self, engine: Any):
         self.engine = engine
+
+    def compose_decision(self, *, decision, signals: HardwareGovernanceSignals):
+        """Compose resolved hardware signals without invoking the golden engine."""
+        return HardwareGovernanceDecisionComposer().compose(decision=decision, signals=signals)
 
     def resolve_category_dependency(self, domain: str, serial_number: str, category):
         """Resolve category presence independently from hardware identity matching."""
