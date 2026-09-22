@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Any, Callable
+from pathlib import Path
 
 import pandas as pd
 
@@ -101,7 +102,7 @@ class HardwareGovernanceService:
             progress or (lambda _message, _percent=0: None),
             write_outputs=request.write_outputs,
         )
-        shadow = self._shadow_compare(request, raw.get("decisions"))
+        shadow = self._shadow_compare(request, raw.get("decisions")) if all(Path(p).is_file() for p in (request.cmdb_path, request.category_path, request.catalog_path)) else {"enabled": False, "reason": "shadow inputs unavailable"}
         return HardwareGovernanceResult(
             domain=request.domain,
             decisions=raw.get("decisions"),
