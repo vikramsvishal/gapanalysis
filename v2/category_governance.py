@@ -124,8 +124,8 @@ class CategoryDependencyGovernance:
 
         return CategoryDependencyDecision(
             serial_number=str(serial_number or ""),
-            category_presence_status="DUPLICATE NORMALIZED SERIAL",
-            parent_dependency_status="BLOCKED - DUPLICATE CATEGORY SERIAL",
+            category_presence_status="FOUND - DUPLICATE NORMALIZED SERIAL",
+            parent_dependency_status="NOT APPLICABLE",
             recommended_action="CATEGORY DATA QUALITY REVIEW",
             parent_attributes={},
         )
