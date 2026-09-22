@@ -36,6 +36,7 @@ class HardwareGovernanceResult:
     recommendations: list[dict[str, Any]] = field(default_factory=list)
     outputs: list[Any] = field(default_factory=list)
     engine: str = "V1.4.1"
+    shadow: dict[str, Any] = field(default_factory=dict)
 
     @property
     def decision_count(self) -> int:
@@ -100,6 +101,7 @@ class HardwareGovernanceService:
             progress or (lambda _message, _percent=0: None),
             write_outputs=request.write_outputs,
         )
+        shadow = self._shadow_compare(request, raw.get("decisions"))
         return HardwareGovernanceResult(
             domain=request.domain,
             decisions=raw.get("decisions"),
@@ -107,4 +109,60 @@ class HardwareGovernanceService:
             candidate_ids=set(raw.get("candidate_ids", set())),
             outputs=list(raw.get("outputs", [])),
             engine="V1.4.1",
+            shadow=shadow,
         )
+
+    def _shadow_compare(self, request: HardwareGovernanceRequest, decisions: Any) -> dict[str, Any]:
+        """Run V2 resolution beside V1.4.1 without changing authoritative results."""
+        golden = load_golden()
+        cmdb = golden.read_tabular(request.cmdb_path)
+        category = golden.read_tabular(request.category_path)
+        catalog = golden.read_tabular(request.catalog_path)
+        serial_col = golden.find_col(cmdb, "Serial number")
+        manufacturer_col = golden.find_col(cmdb, "Manufacturer")
+        model_col = golden.find_col(cmdb, "Model number" if request.domain == "network" else "Model ID")
+        life_col = golden.find_col(cmdb, "Life Cycle Stage")
+        category_governance = CategoryDependencyGovernance(golden.lifecycle, golden.serial_key)
+        resolver = AuthoritativeHardwareCatalogResolver(catalog)
+        mismatches = []
+        row_count = len(cmdb)
+        for position, (_, row) in enumerate(cmdb.iterrows()):
+            serial = str(row[serial_col] or "")
+            model = str(row[model_col] or "")
+            manufacturer = str(row[manufacturer_col] or "")
+            category_decision = category_governance.evaluate(request.domain, serial, category)
+            catalog_resolution = resolver.resolve(CatalogResolutionRequest(
+                domain=request.domain, manufacturer=manufacturer, model=model,
+                source_reference=f"CMDB row {position}",
+            ))
+            golden_record = decisions.iloc[position].to_dict() if hasattr(decisions, "iloc") and position < len(decisions) else {}
+            golden_projection = {
+                "catalog_status": golden_record.get("Catalog Match Status", ""),
+                "category_presence_status": golden_record.get("Category Presence Status", ""),
+                "recommended_action": golden_record.get("Recommended Action", ""),
+                "parent_dependency_status": golden_record.get("Parent Dependency Status", ""),
+            }
+            v2_projection = v2_decision_projection(
+                lifecycle_stage=golden.lifecycle(row[life_col]),
+                reconciliation_action=golden_record.get("Reconciliation Action", ""),
+                catalog_status=catalog_resolution.status,
+                category=category_decision,
+            )
+            differences = {key: {"golden": golden_projection[key], "v2": v2_projection[key]}
+                            for key in golden_projection if golden_projection[key] != v2_projection[key]}
+            if differences:
+                mismatches.append({
+                    "row_index": position,
+                    "serial_number": serial,
+                    "golden": golden_projection,
+                    "v2": v2_projection,
+                    "differences": differences,
+                })
+        return {
+            "enabled": True,
+            "authoritative_engine": "V1.4.1",
+            "row_count": row_count,
+            "match_count": row_count - len(mismatches),
+            "mismatch_count": len(mismatches),
+            "mismatches": mismatches[:100],
+        }
