@@ -57,6 +57,16 @@ def test_result_shadow_endpoint_exposes_persisted_diagnostics(monkeypatch):
         evidence_ids=["EVD-1"],
     )
     monkeypatch.setattr(main._service, "get_result", lambda result_id: result)
+    monkeypatch.setattr(main._service, "get_shadow", lambda result_id: {
+        "result_id": result_id,
+        "authoritative_engine": "V1.4.1",
+        "row_count": 10,
+        "match_count": 8,
+        "mismatch_count": 2,
+        "mismatch_percentage": 20.0,
+        "mismatches": result.summary["shadow"]["mismatches"],
+        "evidence_ids": result.evidence_ids,
+    })
     response = client.get("/api/results/RES-SHADOW-1/shadow")
 
     assert response.status_code == 200
