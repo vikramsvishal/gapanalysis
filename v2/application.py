@@ -9,6 +9,7 @@ from .agents import AgentRegistry, default_registry
 from .jobs import JobManager
 from .services import GovernanceService
 from .results import ResultStore
+from .shadow_migration import ShadowMigrationStore
 from .evidence import EvidenceStore
 from .exceptions import ExceptionStore
 from .audit import AuditStore
@@ -36,6 +37,7 @@ class ApplicationService:
         self.audit = self.audit or AuditStore()
         self.approvals = self.approvals or ApprovalStore()
         self.results = self.results or ResultStore(evidence_store=self.evidence)
+        self.shadow_migration = ShadowMigrationStore()
         if getattr(self.results, "evidence_store", None) is None:
             self.results.evidence_store = self.evidence
         self.jobs = self.jobs or JobManager(self.governance, result_store=self.results, exception_store=self.exceptions, audit_store=self.audit, approval_store=self.approvals)
@@ -108,6 +110,17 @@ class ApplicationService:
             "mismatches": mismatches,
             "evidence_ids": result.evidence_ids,
         }
+
+    def get_shadow_migration(self, result_id: str) -> dict:
+        return self.shadow_migration.summary(result_id)
+
+    def classify_shadow(self, result_id: str, row_index: int, field: str, status: str, rationale: str = "", owner: str = ""):
+        record = self.shadow_migration.upsert(result_id, row_index, field, status, rationale, owner)
+        self.audit.append(
+            "SHADOW_MIGRATION", owner or "system", "RESULT", result_id, "CLASSIFIED",
+            {"classification_id": record.classification_id, "row_index": row_index, "field": field, "status": status},
+        )
+        return record
 
     def get_job_result(self, job_id: str):
         return self.results.for_job(job_id)
