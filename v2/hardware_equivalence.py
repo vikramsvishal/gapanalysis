@@ -41,7 +41,7 @@ def v2_decision_projection(
         ),
     )
     return {
-        "catalog_status": catalog_status.value,
+        "catalog_status": "EXACT MATCH" if catalog_status == CatalogMatchStatus.EXACT else ("NO MATCH" if catalog_status == CatalogMatchStatus.NO_MATCH else catalog_status.value),
         "category_presence_status": category.category_presence_status,
         "recommended_action": result.recommendation,
         "parent_dependency_status": category.parent_dependency_status,
