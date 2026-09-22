@@ -18,7 +18,7 @@ def _catalog(model="C9300-48P", manufacturer="Cisco", opaque="HW-1"):
 def _cmdb(lifecycle_stage="Operational", model="C9300-48P", serial="SN001", manufacturer="Cisco"):
     return pd.DataFrame([
         {
-            "Hostname": "sw01",
+            "Configuration Item": "sw01",
             "Serial number": serial,
             "Manufacturer": manufacturer,
             "Model number": model,
