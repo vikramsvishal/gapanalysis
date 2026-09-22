@@ -65,6 +65,11 @@ def test_result_shadow_endpoint_exposes_persisted_diagnostics(monkeypatch):
         "mismatch_count": 2,
         "mismatch_percentage": 20.0,
         "mismatches": result.summary["shadow"]["mismatches"],
+        "divergence_by_field": [{
+            "field": "recommended_action",
+            "divergence_count": 1,
+            "examples": [{"row_index": 3, "serial_number": "SN3", "golden": "LOAD OS ONLY", "v2": "REVIEW"}],
+        }],
         "evidence_ids": result.evidence_ids,
     })
     response = client.get("/api/results/RES-SHADOW-1/shadow")
