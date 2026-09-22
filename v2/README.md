@@ -79,3 +79,10 @@ The current V1.4.1 outcomes are represented explicitly:
 - non-operational category does not satisfy the parent dependency
 
 This seam is currently additive and regression-tested. The protected V1.4.1 end-to-end hardware workflow remains authoritative. The next step is a shadow composition of catalog resolution + category dependency + lifecycle/load eligibility, followed by equivalence testing against the full V1.4.1 hardware decisions.
+
+
+## Hardware governance decision composition
+
+The category-dependency and authoritative catalog seams are now composed through `HardwareGovernanceDecisionComposer`. The composer consumes already-resolved signals and produces the stable `GovernanceDecision` contract.
+
+Decision precedence is explicit: out-of-scope/non-operational records are no-action; no authoritative catalog match requires catalog update; ambiguous catalog identity requires review; duplicate category dependency requires review; missing category produces category-plus-OS load; an existing production category produces OS-only load. This is additive and test-protected; V1.4.1 remains the execution oracle until shadow equivalence is complete.
