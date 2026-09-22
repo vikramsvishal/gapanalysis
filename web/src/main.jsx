@@ -93,6 +93,10 @@ function ShadowAnalysis({resultId}){
    <div className="stat-card"><div className="stat-top"><span>Divergent</span></div><div className="stat-value">{mismatchCount}</div><div className="stat-delta">rows</div></div>
    <div className="stat-card"><div className="stat-top"><span>Divergence</span></div><div className="stat-value">{shadow?.mismatch_percentage||0}%</div><div className="stat-delta">of evaluated rows</div></div>
   </div>
+  {(shadow?.divergence_by_field||[]).length>0&&<div style={{marginTop:12}}>
+   <strong>Divergence by rule field</strong>
+   <div style={{overflowX:"auto",marginTop:8}}><table><thead><tr><th>Field</th><th>Divergence count</th><th>Example</th></tr></thead><tbody>{shadow.divergence_by_field.map((x,i)=><tr key={x.field||i}><td>{x.field}</td><td>{x.divergence_count}</td><td>{x.examples?.[0]?<span>Row {x.examples[0].row_index}: <code>{String(x.examples[0].golden)}</code> → <code>{String(x.examples[0].v2)}</code></span>:"—"}</td></tr>)}</tbody></table></div>
+  </div>}
   {mismatchCount>0&&<div style={{marginTop:12,overflowX:"auto"}}><table><thead><tr><th>Row</th><th>Serial</th><th>Difference</th></tr></thead><tbody>{(shadow.mismatches||[]).map((x,i)=><tr key={x.row_index??i}><td>{x.row_index}</td><td>{x.serial_number||"—"}</td><td><pre style={{margin:0,whiteSpace:"pre-wrap"}}>{JSON.stringify(x.differences,null,2)}</pre></td></tr>)}</tbody></table></div>}
   {shadow?.evidence_ids?.length>0&&<small style={{display:"block",marginTop:10}}>Linked evidence: {shadow.evidence_ids.join(", ")}</small>}
  </div>;
