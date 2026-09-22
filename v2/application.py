@@ -68,6 +68,28 @@ class ApplicationService:
     def get_result(self, result_id: str):
         return self.results.get(result_id)
 
+    def get_shadow(self, result_id: str) -> dict | None:
+        """Return persisted non-authoritative shadow diagnostics for a result."""
+        result = self.results.get(result_id)
+        if result is None or not isinstance(result.summary, dict):
+            return None
+        shadow = result.summary.get("shadow")
+        if not isinstance(shadow, dict) or not shadow.get("enabled"):
+            return None
+        return {
+            "result_id": result_id,
+            "authoritative_engine": shadow.get("authoritative_engine", "V1.4.1"),
+            "row_count": shadow.get("row_count", 0),
+            "match_count": shadow.get("match_count", 0),
+            "mismatch_count": shadow.get("mismatch_count", 0),
+            "mismatch_percentage": (
+                round((shadow.get("mismatch_count", 0) / shadow.get("row_count", 0)) * 100, 2)
+                if shadow.get("row_count") else 0.0
+            ),
+            "mismatches": shadow.get("mismatches", []),
+            "evidence_ids": result.evidence_ids,
+        }
+
     def get_job_result(self, job_id: str):
         return self.results.for_job(job_id)
 
