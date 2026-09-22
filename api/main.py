@@ -295,6 +295,36 @@ def list_results() -> dict[str, Any]:
     return {"items": [result.public() for result in _service.list_results()]}
 
 
+@app.get("/api/results/{result_id}/shadow/migration")
+def result_shadow_migration(result_id: str) -> dict[str, Any]:
+    result = _service.get_result(result_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail="result not found")
+    return _service.get_shadow_migration(result_id)
+
+
+class ShadowClassificationRequest(BaseModel):
+    row_index: int
+    field: str
+    status: str
+    rationale: str = ""
+    owner: str = ""
+
+
+@app.post("/api/results/{result_id}/shadow/migration")
+def classify_shadow(result_id: str, request: ShadowClassificationRequest) -> dict[str, Any]:
+    result = _service.get_result(result_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail="result not found")
+    try:
+        return _service.classify_shadow(
+            result_id, request.row_index, request.field, request.status,
+            request.rationale, request.owner
+        ).public()
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
 @app.get("/api/results/{result_id}/shadow")
 def result_shadow(result_id: str) -> dict[str, Any]:
     result = _service.get_result(result_id)
