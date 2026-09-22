@@ -36,3 +36,44 @@ def test_preflight_reports_exact_missing_inputs():
     data = response.json()
     assert data["ready"] is False
     assert [x["kind"] for x in data["missing"]] == ["nw_cmdb","is_os","catalog_os"]
+
+
+def test_result_shadow_endpoint_exposes_persisted_diagnostics(monkeypatch):
+    from types import SimpleNamespace
+    from api import main
+
+    result = SimpleNamespace(
+        result_id="RES-SHADOW-1",
+        summary={
+            "shadow": {
+                "enabled": True,
+                "authoritative_engine": "V1.4.1",
+                "row_count": 10,
+                "match_count": 8,
+                "mismatch_count": 2,
+                "mismatches": [{"row_index": 3, "serial_number": "SN3", "differences": {"recommended_action": {"golden": "LOAD OS ONLY", "v2": "REVIEW"}}}],
+            }
+        },
+        evidence_ids=["EVD-1"],
+    )
+    monkeypatch.setattr(main._service, "get_result", lambda result_id: result)
+    response = client.get("/api/results/RES-SHADOW-1/shadow")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["authoritative_engine"] == "V1.4.1"
+    assert data["row_count"] == 10
+    assert data["match_count"] == 8
+    assert data["mismatch_count"] == 2
+    assert data["mismatch_percentage"] == 20.0
+    assert data["evidence_ids"] == ["EVD-1"]
+
+
+def test_result_shadow_endpoint_returns_404_when_shadow_is_unavailable(monkeypatch):
+    from types import SimpleNamespace
+    from api import main
+
+    monkeypatch.setattr(main._service, "get_result", lambda result_id: SimpleNamespace(result_id=result_id, summary={}, evidence_ids=[]))
+    response = client.get("/api/results/RES-NO-SHADOW/shadow")
+
+    assert response.status_code == 404
