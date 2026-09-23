@@ -22,7 +22,7 @@ async function getJSON(path){
 }
 
 function Sidebar({active,setActive,health}){
- const nav=[["overview","Overview","home"],["governance","Governance","shield"],["reconciliation","Reconciliation","layers"],["results","Results","database"],["jobs","Jobs & runs","clock"],["exceptions","Exceptions","alert"],["audit","Audit & evidence","database"],["approvals","Load approvals","check"]];
+ const nav=[["overview","Overview","home"],["governance","Governance","shield"],["reconciliation","Reconciliation","layers"],["results","Results","database"],["jobs","Jobs & runs","clock"],["exceptions","Exceptions","alert"],["audit","Audit & evidence","database"],["approvals","Load approvals","check"],["migration-evidence","Migration evidence","shield"]];
  return <aside className="sidebar">
   <div className="brand"><div className="brand-mark"><Icon name="grid"/></div><div><strong>Reconciliation</strong><span>Recommendation Platform</span></div></div>
   <div className="app-selector"><div className="eyebrow">ACTIVE APPLICATION</div><div className="app-name"><span className="status-dot"/> CMDB & IS Governance</div><Badge tone="active">LOCAL EDITION</Badge></div>
@@ -148,7 +148,7 @@ function LoadApprovals(){
 function App(){
  const [active,setActive]=useState("overview"),[health,setHealth]=useState(null),[operations,setOperations]=useState(fallbackOperations),[jobs,setJobs]=useState([]),[error,setError]=useState("");
  useEffect(()=>{Promise.all([getJSON("/api/health"),getJSON("/api/governance/operations")]).then(([h,o])=>{setHealth(h);setOperations(o.items||fallbackOperations)}).catch(e=>setError(e.message))},[]);
- const page=active==="overview"?<Overview setActive={setActive} operations={operations} health={health}/>:active==="reconciliation"?<Reconciliation operations={operations} setActive={setActive}/>:active==="results"?<Results/>:active==="jobs"?<Jobs jobs={jobs} setJobs={setJobs}/>:active==="exceptions"?<GovernanceExceptions/>:active==="approvals"?<LoadApprovals/>:active==="audit"?<AuditEvidence/>:active==="governance"?<Generic type="audit"/>:<Generic type={active}/>;
+ const page=active==="overview"?<Overview setActive={setActive} operations={operations} health={health}/>:active==="reconciliation"?<Reconciliation operations={operations} setActive={setActive}/>:active==="results"?<Results/>:active==="jobs"?<Jobs jobs={jobs} setJobs={setJobs}/>:active==="exceptions"?<GovernanceExceptions/>:active==="approvals"?<LoadApprovals/>:active==="migration-evidence"?<MigrationEvidence/>:active==="audit"?<AuditEvidence/>:active==="governance"?<Generic type="audit"/>:<Generic type={active}/>;
  return <div className="app"><Sidebar active={active} setActive={setActive} health={health}/><main><Header active={active} health={health}/>{error&&<div style={{margin:"12px 32px",padding:"10px",background:"#fff1f2",border:"1px solid #fecdd3",borderRadius:8,fontSize:11}}>API connection: {error}</div>}{page}</main></div>;
 }
 createRoot(document.getElementById("root")).render(<App />);
