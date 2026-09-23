@@ -326,6 +326,51 @@ def classify_shadow(result_id: str, request: ShadowClassificationRequest) -> dic
         raise HTTPException(status_code=400, detail=str(exc))
 
 
+
+
+class MigrationEvidenceRequest(BaseModel):
+    scope: str = "ALL"
+    capability: str | None = None
+    result_ids: list[str] = []
+    actor: str = "local-user"
+
+
+@app.get("/api/migration-evidence")
+def list_migration_evidence() -> dict[str, Any]:
+    return {"items": [item.public() for item in _service.list_migration_evidence()]}
+
+
+@app.post("/api/migration-evidence")
+def generate_migration_evidence(request: MigrationEvidenceRequest) -> dict[str, Any]:
+    try:
+        item = _service.generate_migration_evidence(
+            scope=request.scope,
+            capability=request.capability,
+            result_ids=request.result_ids,
+            actor=request.actor,
+        )
+        return item.public()
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.get("/api/migration-evidence/{package_id}")
+def get_migration_evidence(package_id: str) -> dict[str, Any]:
+    item = _service.get_migration_evidence(package_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="migration evidence pack not found")
+    return item.public()
+
+
+@app.get("/api/migration-evidence/{package_id}/manifest")
+def migration_evidence_manifest(package_id: str) -> dict[str, Any]:
+    item = _service.get_migration_evidence(package_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="migration evidence pack not found")
+    manifest = _service.migration_evidence_manifest(package_id)
+    return {"package": item.public(), "manifest": manifest}
+
+
 @app.get("/api/migration-readiness")
 def capability_migration_readiness() -> dict[str, Any]:
     return _service.get_capability_migration_readiness()
