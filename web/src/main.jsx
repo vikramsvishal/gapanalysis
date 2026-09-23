@@ -152,3 +152,10 @@ function App(){
  return <div className="app"><Sidebar active={active} setActive={setActive} health={health}/><main><Header active={active} health={health}/>{error&&<div style={{margin:"12px 32px",padding:"10px",background:"#fff1f2",border:"1px solid #fecdd3",borderRadius:8,fontSize:11}}>API connection: {error}</div>}{page}</main></div>;
 }
 createRoot(document.getElementById("root")).render(<App />);
+function App(){
+ const [active,setActive]=useState("overview"),[health,setHealth]=useState(null),[operations,setOperations]=useState(fallbackOperations),[jobs,setJobs]=useState([]),[error,setError]=useState("");
+ useEffect(()=>{Promise.all([getJSON("/api/health"),getJSON("/api/governance/operations")]).then(([h,o])=>{setHealth(h);setOperations(o.items||fallbackOperations)}).catch(e=>setError(e.message))},[]);
+ const page=active==="overview"?<Overview setActive={setActive} operations={operations} health={health}/>:active==="reconciliation"?<Reconciliation operations={operations} setActive={setActive}/>:active==="results"?<Results/>:active==="jobs"?<Jobs jobs={jobs} setJobs={setJobs}/>:active==="exceptions"?<GovernanceExceptions/>:active==="approvals"?<LoadApprovals/>:active==="migration-evidence"?<MigrationEvidence/>:active==="audit"?<AuditEvidence/>:active==="governance"?<Generic type="audit"/>:<Generic type={active}/>;
+ return <div className="app"><Sidebar active={active} setActive={setActive} health={health}/><main><Header active={active} health={health}/>{error&&<div style={{margin:"12px 32px",padding:"10px",background:"#fff1f2",border:"1px solid #fecdd3",borderRadius:8,fontSize:11}}>API connection: {error}</div>}{page}</main></div>;
+}
+createRoot(document.getElementById("root")).render(<App />);
