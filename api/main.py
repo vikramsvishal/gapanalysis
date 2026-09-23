@@ -326,6 +326,11 @@ def classify_shadow(result_id: str, request: ShadowClassificationRequest) -> dic
         raise HTTPException(status_code=400, detail=str(exc))
 
 
+@app.get("/api/migration-readiness")
+def capability_migration_readiness() -> dict[str, Any]:
+    return _service.get_capability_migration_readiness()
+
+
 @app.get("/api/results/{result_id}/migration-readiness")
 def migration_readiness(result_id: str) -> dict[str, Any]:
     result = _service.get_result(result_id)
