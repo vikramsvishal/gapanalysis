@@ -12,6 +12,7 @@ from .results import ResultStore
 from .shadow_migration import ShadowMigrationStore
 from .migration_readiness import MigrationReadinessGate
 from .migration_evidence import MigrationEvidencePackStore
+from .migration_decision import MigrationDecisionStore
 from .evidence import EvidenceStore
 from .exceptions import ExceptionStore
 from .audit import AuditStore
@@ -42,6 +43,7 @@ class ApplicationService:
         self.shadow_migration = ShadowMigrationStore()
         self.migration_readiness = MigrationReadinessGate()
         self.migration_evidence = MigrationEvidencePackStore()
+        self.migration_decisions = MigrationDecisionStore()
         if getattr(self.results, "evidence_store", None) is None:
             self.results.evidence_store = self.evidence
         self.jobs = self.jobs or JobManager(self.governance, result_store=self.results, exception_store=self.exceptions, audit_store=self.audit, approval_store=self.approvals)
@@ -190,6 +192,28 @@ class ApplicationService:
     def migration_readiness_capability(self, result) -> str:
         from .migration_readiness import capability
         return capability(result.operation, str((result.inputs or {}).get("domain", "")))
+
+    def record_migration_decision(self, package_id: str, decision: str, actor: str, rationale: str = ""):
+        package = self.migration_evidence.get(package_id)
+        if package is None:
+            raise ValueError("migration evidence pack not found")
+        if package.readiness.get("status") not in ("READY_FOR_AUTHORITY_REVIEW", "READY"):
+            raise ValueError("migration evidence pack is not ready for authority review")
+        record = self.migration_decisions.record(package, decision, actor, rationale)
+        self.audit.append("MIGRATION_DECISION", actor, "MIGRATION_EVIDENCE", package_id, decision, {
+            "decision_id": record.decision_id, "decision_sha256": record.decision_sha256,
+            "package_manifest_sha256": record.package_manifest_sha256, "authority_changed": False,
+        })
+        return record
+
+    def get_migration_decision(self, decision_id: str):
+        return self.migration_decisions.get(decision_id)
+
+    def list_migration_decisions(self):
+        return self.migration_decisions.list()
+
+    def migration_package_decisions(self, package_id: str):
+        return self.migration_decisions.for_package(package_id)
 
     def get_migration_readiness(self, result_id: str) -> dict:
         shadow = self.get_shadow(result_id)
