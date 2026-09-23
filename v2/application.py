@@ -10,6 +10,7 @@ from .jobs import JobManager
 from .services import GovernanceService
 from .results import ResultStore
 from .shadow_migration import ShadowMigrationStore
+from .migration_readiness import MigrationReadinessGate
 from .evidence import EvidenceStore
 from .exceptions import ExceptionStore
 from .audit import AuditStore
@@ -38,6 +39,7 @@ class ApplicationService:
         self.approvals = self.approvals or ApprovalStore()
         self.results = self.results or ResultStore(evidence_store=self.evidence)
         self.shadow_migration = ShadowMigrationStore()
+        self.migration_readiness = MigrationReadinessGate()
         if getattr(self.results, "evidence_store", None) is None:
             self.results.evidence_store = self.evidence
         self.jobs = self.jobs or JobManager(self.governance, result_store=self.results, exception_store=self.exceptions, audit_store=self.audit, approval_store=self.approvals)
@@ -113,6 +115,11 @@ class ApplicationService:
 
     def get_shadow_migration(self, result_id: str) -> dict:
         return self.shadow_migration.summary(result_id)
+
+    def get_migration_readiness(self, result_id: str) -> dict:
+        shadow = self.get_shadow(result_id)
+        classifications = [x.public() for x in self.shadow_migration.for_result(result_id)]
+        return self.migration_readiness.evaluate(shadow, classifications)
 
     def classify_shadow(self, result_id: str, row_index: int, field: str, status: str, rationale: str = "", owner: str = ""):
         record = self.shadow_migration.upsert(result_id, row_index, field, status, rationale, owner)
