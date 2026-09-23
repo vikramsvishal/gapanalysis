@@ -116,6 +116,12 @@ class ApplicationService:
     def get_shadow_migration(self, result_id: str) -> dict:
         return self.shadow_migration.summary(result_id)
 
+    def get_capability_migration_readiness(self) -> dict:
+        results = self.results.list()
+        shadows = {r.result_id: self.get_shadow(r.result_id) for r in results}
+        classifications = {r.result_id: [x.public() for x in self.shadow_migration.for_result(r.result_id)] for r in results}
+        return self.migration_readiness.evaluate_capabilities(results, shadows, classifications)
+
     def get_migration_readiness(self, result_id: str) -> dict:
         shadow = self.get_shadow(result_id)
         classifications = [x.public() for x in self.shadow_migration.for_result(result_id)]
