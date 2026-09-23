@@ -354,6 +354,35 @@ def generate_migration_evidence(request: MigrationEvidenceRequest) -> dict[str, 
         raise HTTPException(status_code=400, detail=str(exc))
 
 
+
+
+class MigrationDecisionRequest(BaseModel):
+    decision: str
+    actor: str = "local-user"
+    rationale: str = ""
+
+
+@app.get("/api/migration-decisions")
+def list_migration_decisions() -> dict[str, Any]:
+    return {"items": [x.public() for x in _service.list_migration_decisions()]}
+
+
+@app.get("/api/migration-evidence/{package_id}/decisions")
+def migration_package_decisions(package_id: str) -> dict[str, Any]:
+    item = _service.get_migration_evidence(package_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="migration evidence pack not found")
+    return {"items": [x.public() for x in _service.migration_package_decisions(package_id)]}
+
+
+@app.post("/api/migration-evidence/{package_id}/decisions")
+def record_migration_decision(package_id: str, request: MigrationDecisionRequest) -> dict[str, Any]:
+    try:
+        return _service.record_migration_decision(package_id, request.decision, request.actor, request.rationale).public()
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
 @app.get("/api/migration-evidence/{package_id}")
 def get_migration_evidence(package_id: str) -> dict[str, Any]:
     item = _service.get_migration_evidence(package_id)
