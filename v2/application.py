@@ -11,6 +11,7 @@ from .services import GovernanceService
 from .results import ResultStore
 from .shadow_migration import ShadowMigrationStore
 from .migration_readiness import MigrationReadinessGate
+from .migration_evidence import MigrationEvidencePackStore
 from .evidence import EvidenceStore
 from .exceptions import ExceptionStore
 from .audit import AuditStore
@@ -40,6 +41,7 @@ class ApplicationService:
         self.results = self.results or ResultStore(evidence_store=self.evidence)
         self.shadow_migration = ShadowMigrationStore()
         self.migration_readiness = MigrationReadinessGate()
+        self.migration_evidence = MigrationEvidencePackStore()
         if getattr(self.results, "evidence_store", None) is None:
             self.results.evidence_store = self.evidence
         self.jobs = self.jobs or JobManager(self.governance, result_store=self.results, exception_store=self.exceptions, audit_store=self.audit, approval_store=self.approvals)
@@ -121,6 +123,73 @@ class ApplicationService:
         shadows = {r.result_id: self.get_shadow(r.result_id) for r in results}
         classifications = {r.result_id: [x.public() for x in self.shadow_migration.for_result(r.result_id)] for r in results}
         return self.migration_readiness.evaluate_capabilities(results, shadows, classifications)
+
+    def generate_migration_evidence(
+        self, scope: str = "ALL", capability: str | None = None, result_ids: list[str] | None = None,
+        actor: str = "local-user"
+    ):
+        """Freeze shadow, classification, readiness and audit evidence for review."""
+        all_results = self.results.list()
+        selected = [r for r in all_results if not result_ids or r.result_id in set(result_ids)]
+        if capability:
+            selected = [r for r in selected if self.migration_readiness_capability(r) == capability]
+        selected = [r for r in selected if r.status == "COMPLETED"]
+        selected_ids = [r.result_id for r in selected]
+        shadows = {r.result_id: self.get_shadow(r.result_id) for r in selected}
+        classifications = {r.result_id: [x.public() for x in self.shadow_migration.for_result(r.result_id)] for r in selected}
+        readiness = self.migration_readiness.evaluate_capabilities(selected, shadows, classifications)
+        if capability:
+            readiness = next((x for x in readiness.get("capabilities", []) if x.get("capability") == capability), {
+                "capability": capability, "status": "NOT_READY", "result_count": 0,
+                "divergence_count": 0, "blocking_count": 0, "unclassified_count": 0,
+            })
+        else:
+            readiness = {**readiness, "scope": scope}
+        shadow_evidence_ids = []
+        classification_ids = []
+        for result in selected:
+            shadow_evidence_ids.extend(
+                [e.evidence_id for e in self.evidence.for_result(result.result_id) if e.kind == "HARDWARE_GOVERNANCE_SHADOW"]
+            )
+            classification_ids.extend(x["classification_id"] for x in classifications[result.result_id])
+        audit_items = []
+        for event in self.audit.list():
+            if event.entity_type == "RESULT" and event.entity_id in selected_ids:
+                audit_items.append(event)
+        audit_event_ids = [x.event_id for x in audit_items]
+        manifest = {
+            "results": [r.public() for r in selected],
+            "shadows": shadows,
+            "classifications": classifications,
+            "readiness": readiness,
+            "audit": [x.public() for x in audit_items],
+            "golden_version": self.golden_version,
+            "application_version": self.version,
+        }
+        record = self.migration_evidence.create(
+            scope=scope, capability=capability, result_ids=selected_ids,
+            shadow_evidence_ids=sorted(set(shadow_evidence_ids)),
+            classification_ids=sorted(set(classification_ids)),
+            audit_event_ids=audit_event_ids, readiness=readiness, manifest=manifest,
+        )
+        self.audit.append("MIGRATION_EVIDENCE", actor, "MIGRATION_EVIDENCE", record.package_id, "GENERATED", {
+            "scope": scope, "capability": capability, "result_count": len(selected_ids),
+            "manifest_sha256": record.manifest_sha256, "authoritative_engine": self.golden_version,
+        })
+        return record
+
+    def migration_evidence_manifest(self, package_id: str):
+        return self.migration_evidence.manifest(package_id)
+
+    def list_migration_evidence(self):
+        return self.migration_evidence.list()
+
+    def get_migration_evidence(self, package_id: str):
+        return self.migration_evidence.get(package_id)
+
+    def migration_readiness_capability(self, result) -> str:
+        from .migration_readiness import capability
+        return capability(result.operation, str((result.inputs or {}).get("domain", "")))
 
     def get_migration_readiness(self, result_id: str) -> dict:
         shadow = self.get_shadow(result_id)
