@@ -362,6 +362,46 @@ class MigrationDecisionRequest(BaseModel):
     rationale: str = ""
 
 
+class AuthorityActivationRequest(BaseModel):
+    decision_id: str
+    actor: str = "local-user"
+    rationale: str = ""
+
+
+class AuthorityRollbackRequest(BaseModel):
+    actor: str = "local-user"
+    rationale: str = ""
+
+
+@app.get("/api/authority")
+def list_authority() -> dict[str, Any]:
+    return {"items": [x.public() for x in _service.list_authority()]}
+
+
+@app.get("/api/authority/{capability}")
+def get_authority(capability: str) -> dict[str, Any]:
+    try:
+        return _service.get_authority(capability).public()
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.post("/api/authority/{capability}/activate")
+def activate_authority(capability: str, request: AuthorityActivationRequest) -> dict[str, Any]:
+    try:
+        return _service.activate_authority(capability, request.decision_id, request.actor, request.rationale).public()
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+
+
+@app.post("/api/authority/{capability}/rollback")
+def rollback_authority(capability: str, request: AuthorityRollbackRequest) -> dict[str, Any]:
+    try:
+        return _service.rollback_authority(capability, request.actor, request.rationale).public()
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
 @app.get("/api/migration-decisions")
 def list_migration_decisions() -> dict[str, Any]:
     return {"items": [x.public() for x in _service.list_migration_decisions()]}

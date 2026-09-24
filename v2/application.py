@@ -13,6 +13,7 @@ from .shadow_migration import ShadowMigrationStore
 from .migration_readiness import MigrationReadinessGate
 from .migration_evidence import MigrationEvidencePackStore
 from .migration_decision import MigrationDecisionStore
+from .authority import AuthorityStore
 from .evidence import EvidenceStore
 from .exceptions import ExceptionStore
 from .audit import AuditStore
@@ -44,6 +45,7 @@ class ApplicationService:
         self.migration_readiness = MigrationReadinessGate()
         self.migration_evidence = MigrationEvidencePackStore()
         self.migration_decisions = MigrationDecisionStore()
+        self.authority = AuthorityStore(self.migration_decisions, self.migration_evidence)
         if getattr(self.results, "evidence_store", None) is None:
             self.results.evidence_store = self.evidence
         self.jobs = self.jobs or JobManager(self.governance, result_store=self.results, exception_store=self.exceptions, audit_store=self.audit, approval_store=self.approvals)
@@ -205,6 +207,35 @@ class ApplicationService:
             "package_manifest_sha256": record.package_manifest_sha256, "authority_changed": False,
         })
         return record
+
+    def list_authority(self):
+        return self.authority.list()
+
+    def get_authority(self, capability: str):
+        return self.authority.get(capability)
+
+    def activate_authority(self, capability: str, decision_id: str, actor: str, rationale: str = ""):
+        state = self.authority.activate(capability, decision_id, actor, rationale)
+        self.audit.append(
+            "AUTHORITY", actor, "AUTHORITY", capability, "ACTIVATED",
+            {
+                "engine": state.engine,
+                "previous_engine": state.previous_engine,
+                "migration_decision_id": state.migration_decision_id,
+                "migration_decision_sha256": state.migration_decision_sha256,
+                "evidence_package_id": state.evidence_package_id,
+                "evidence_manifest_sha256": state.evidence_manifest_sha256,
+            },
+        )
+        return state
+
+    def rollback_authority(self, capability: str, actor: str, rationale: str = ""):
+        state = self.authority.rollback(capability, actor, rationale)
+        self.audit.append(
+            "AUTHORITY", actor, "AUTHORITY", capability, "ROLLED_BACK",
+            {"engine": state.engine, "previous_engine": state.previous_engine, "rationale": rationale.strip()},
+        )
+        return state
 
     def get_migration_decision(self, decision_id: str):
         return self.migration_decisions.get(decision_id)
