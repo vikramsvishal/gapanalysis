@@ -14,6 +14,7 @@ from .migration_readiness import MigrationReadinessGate
 from .migration_evidence import MigrationEvidencePackStore
 from .migration_decision import MigrationDecisionStore
 from .authority import AuthorityStore
+from .execution_router import ExecutionRouter
 from .evidence import EvidenceStore
 from .exceptions import ExceptionStore
 from .audit import AuditStore
@@ -48,7 +49,8 @@ class ApplicationService:
         self.authority = AuthorityStore(self.migration_decisions, self.migration_evidence)
         if getattr(self.results, "evidence_store", None) is None:
             self.results.evidence_store = self.evidence
-        self.jobs = self.jobs or JobManager(self.governance, result_store=self.results, exception_store=self.exceptions, audit_store=self.audit, approval_store=self.approvals)
+        self.execution_router = ExecutionRouter(self.authority, self.governance.execute_operation)
+        self.jobs = self.jobs or JobManager(self.governance, result_store=self.results, exception_store=self.exceptions, audit_store=self.audit, approval_store=self.approvals, execution_router=self.execution_router)
 
     @property
     def version(self) -> str:

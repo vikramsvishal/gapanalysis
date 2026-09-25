@@ -63,12 +63,13 @@ class JobRecord:
 
 
 class JobManager:
-    def __init__(self, service: Any, state_path: Path | None = None, result_store: Any | None = None, exception_store: Any | None = None, audit_store: Any | None = None, approval_store: ApprovalStore | None = None):
+    def __init__(self, service: Any, state_path: Path | None = None, result_store: Any | None = None, exception_store: Any | None = None, audit_store: Any | None = None, approval_store: ApprovalStore | None = None, execution_router: Any | None = None):
         self.service = service
         self.result_store = result_store
         self.exception_store = exception_store
         self.audit_store = audit_store
         self.approval_store = approval_store
+        self.execution_router = execution_router
         self.state_path = state_path or (
             Path(__file__).resolve().parent / "runtime" / "jobs.json"
         )
@@ -144,7 +145,10 @@ class JobManager:
             progress = lambda message, percent=0: self._update(
                 job_id, progress=max(1, min(99, int(percent))), message=str(message)
             )
-            result = self.service.execute_operation(operation, payload, progress=progress)
+            if self.execution_router is not None:
+                result = self.execution_router.execute(operation, payload, progress=progress)
+            else:
+                result = self.service.execute_operation(operation, payload, progress=progress)
             shadow = result.get("shadow") if isinstance(result, dict) else None
             shadow_evidence = None
             if result_record is not None and shadow and shadow.get("enabled"):
