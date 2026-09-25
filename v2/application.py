@@ -49,7 +49,12 @@ class ApplicationService:
         self.authority = AuthorityStore(self.migration_decisions, self.migration_evidence)
         if getattr(self.results, "evidence_store", None) is None:
             self.results.evidence_store = self.evidence
-        self.execution_router = ExecutionRouter(\n            self.authority,\n            self.governance.execute_operation,\n            v2_executors={"NETWORK_RECONCILIATION": self.governance.execute_v2_network_reconciliation},\n        )\n        self.jobs = self.jobs or JobManager(self.governance, result_store=self.results, exception_store=self.exceptions, audit_store=self.audit, approval_store=self.approvals, execution_router=self.execution_router)
+        self.execution_router = ExecutionRouter(
+            self.authority,
+            self.governance.execute_operation,
+            v2_executors={"NETWORK_RECONCILIATION": self.governance.execute_v2_network_reconciliation},
+        )
+        self.jobs = self.jobs or JobManager(self.governance, result_store=self.results, exception_store=self.exceptions, audit_store=self.audit, approval_store=self.approvals, execution_router=self.execution_router)
 
     @property
     def version(self) -> str:
