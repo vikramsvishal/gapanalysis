@@ -68,6 +68,21 @@ class GovernanceService:
                 fi.load_workbook(record.stored_path)
         return fi
 
+    def execute_v2_network_reconciliation(self, operation: str, payload: dict[str, Any], **kwargs):
+        """Execute the extracted V2 network reconciliation only when authority routes here."""
+        if operation != "reconcile_network":
+            raise ValueError(f"Unsupported V2 operation: {operation}")
+        progress = kwargs.get("progress") or (lambda message, percent=0: None)
+        self._require_ready(operation, payload)
+        from .network_reconciliation import NetworkReconciliationExecutor
+        return NetworkReconciliationExecutor().execute(
+            self._tabular(payload, "nw_cmdb"),
+            self._tabular(payload, "is_os"),
+            self._tabular(payload, "catalog_os"),
+            self._field_intelligence(payload),
+            progress,
+        )
+
     def _execute_resource_operation(self, operation: str, payload: dict[str, Any], progress):
         if operation == "reconcile_network":
             return self.engine.reconcile_nw(
