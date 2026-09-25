@@ -16,6 +16,8 @@ from typing import Any, Callable
 import hashlib
 import json
 
+import pandas as pd
+
 from .approvals import ApprovalStore
 
 
@@ -145,11 +147,69 @@ class JobManager:
             progress = lambda message, percent=0: self._update(
                 job_id, progress=max(1, min(99, int(percent))), message=str(message)
             )
+            shadow = None
             if self.execution_router is not None:
+                route = self.execution_router.route(operation, payload)
                 result = self.execution_router.execute(operation, payload, progress=progress)
+                # Runtime shadowing: V1.4.1 remains authoritative while the
+                # registered V2 executor evaluates the exact same resource inputs.
+                if route.engine == "V1.4.1" and route.capability in self.execution_router.v2_executors:
+                    try:
+                        v2_result = self.execution_router.v2_executors[route.capability](
+                            operation, payload, progress=progress
+                        )
+                        if isinstance(result, pd.DataFrame) and isinstance(v2_result, pd.DataFrame):
+                            differences = []
+                            columns = sorted(set(result.columns) | set(v2_result.columns))
+                            max_rows = max(len(result), len(v2_result))
+                            for row_index in range(max_rows):
+                                row_diff = {}
+                                for column in columns:
+                                    golden_value = result.iloc[row_index][column] if row_index < len(result) and column in result.columns else None
+                                    v2_value = v2_result.iloc[row_index][column] if row_index < len(v2_result) and column in v2_result.columns else None
+                                    if pd.isna(golden_value) and pd.isna(v2_value):
+                                        continue
+                                    if str(golden_value) != str(v2_value):
+                                        row_diff[column] = {"golden": str(golden_value), "v2": str(v2_value)}
+                                if row_diff:
+                                    serial = ""
+                                    if row_index < len(result):
+                                        for candidate in ("Serial Number", "serial_number", "Serial"):
+                                            if candidate in result.columns:
+                                                serial = str(result.iloc[row_index][candidate])
+                                                break
+                                    differences.append({"row_index": row_index, "serial_number": serial, "differences": row_diff})
+                            shadow = {
+                                "enabled": True,
+                                "authoritative_engine": "V1.4.1",
+                                "candidate_engine": "V2",
+                                "row_count": max_rows,
+                                "match_count": max_rows - len(differences),
+                                "mismatch_count": len(differences),
+                                "mismatches": differences[:500],
+                            }
+                        else:
+                            shadow = {
+                                "enabled": True,
+                                "authoritative_engine": "V1.4.1",
+                                "candidate_engine": "V2",
+                                "status": "INCOMPARABLE_RESULT_TYPE",
+                                "golden_type": type(result).__name__,
+                                "v2_type": type(v2_result).__name__,
+                            }
+                    except Exception as shadow_exc:
+                        shadow = {
+                            "enabled": True,
+                            "authoritative_engine": "V1.4.1",
+                            "candidate_engine": "V2",
+                            "status": "SHADOW_EXECUTION_FAILED",
+                            "error": f"{type(shadow_exc).__name__}: {shadow_exc}",
+                        }
             else:
                 result = self.service.execute_operation(operation, payload, progress=progress)
-            shadow = result.get("shadow") if isinstance(result, dict) else None
+            if isinstance(result, dict) and shadow is not None:
+                result = dict(result)
+                result["shadow"] = shadow
             shadow_evidence = None
             if result_record is not None and shadow and shadow.get("enabled"):
                 shadow_payload = json.dumps(shadow, sort_keys=True, separators=(",", ":"), default=str)
