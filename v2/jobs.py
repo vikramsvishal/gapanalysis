@@ -207,9 +207,14 @@ class JobManager:
                         }
             else:
                 result = self.service.execute_operation(operation, payload, progress=progress)
-            if isinstance(result, dict) and shadow is not None:
-                result = dict(result)
-                result["shadow"] = shadow
+            if shadow is not None:
+                if isinstance(result, dict):
+                    result = dict(result)
+                    result["shadow"] = shadow
+                else:
+                    # Keep the authoritative dataframe intact for the engine path,
+                    # while wrapping the persisted job/result summary with shadow metadata.
+                    result = {"authoritative_result": result, "shadow": shadow}
             shadow_evidence = None
             if result_record is not None and shadow and shadow.get("enabled"):
                 shadow_payload = json.dumps(shadow, sort_keys=True, separators=(",", ":"), default=str)
