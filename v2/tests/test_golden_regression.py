@@ -79,3 +79,16 @@ def test_v2_identity_facade_is_still_golden_backed():
         "serial_number": "sn001",
         "ip_address": "10.1.2.3",
     }
+
+
+def test_v2_normalization_has_no_legacy_adapter_dependency():
+    source = __import__("inspect").getsource(v2n)
+    assert "legacy_adapter" not in source
+
+
+def test_field_resolution_matches_golden(golden):
+    import pandas as pd
+    df = pd.DataFrame(columns=["Host Name", "Serial Number", "IP Address"])
+    for aliases in [("Host Name",), ("Serial Number",), ("IP Address",)]:
+        assert v2n.find_col(df, *aliases) == golden.find_col(df, *aliases)
+    assert v2n.find_col(df, "Missing", required=False) == golden.find_col(df, "Missing", required=False)
