@@ -6,18 +6,32 @@ behavior reference until each domain is extracted and covered by regression test
 from __future__ import annotations
 
 import importlib.util
+import sys
 from pathlib import Path
 from types import ModuleType
 
 _GOLDEN_PATH = Path(__file__).resolve().parents[1] / "WPP_CMDB_IS_Gap_Analysis_V1_4_1_Consolidated.py"
+_GOLDEN_MODULE_NAME = "wpp_v1_4_1_golden"
 
 
 def load_golden() -> ModuleType:
-    spec = importlib.util.spec_from_file_location("wpp_v1_4_1_golden", _GOLDEN_PATH)
+    existing = sys.modules.get(_GOLDEN_MODULE_NAME)
+    if existing is not None:
+        return existing
+
+    spec = importlib.util.spec_from_file_location(_GOLDEN_MODULE_NAME, _GOLDEN_PATH)
     if spec is None or spec.loader is None:
         raise ImportError(f"Unable to load golden implementation: {_GOLDEN_PATH}")
+
     module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    # Register the dynamically loaded module before execution. This is required
+    # by dataclasses and other runtime introspection that resolve __module__.
+    sys.modules[_GOLDEN_MODULE_NAME] = module
+    try:
+        spec.loader.exec_module(module)
+    except Exception:
+        sys.modules.pop(_GOLDEN_MODULE_NAME, None)
+        raise
     return module
 
 
