@@ -59,9 +59,6 @@ def test_network_v2_executor_is_registered_but_v1_remains_authoritative():
 
 def test_network_shadow_uses_v2_executor_without_changing_authority():
     import pandas as pd
-    from v2.jobs import JobManager
-    from v2.execution_router import ExecutionRouter
-    from v2.authority import AuthorityStore
 
     class Service:
         resources = None
