@@ -46,3 +46,12 @@ def test_v2_authority_fails_closed_without_executor(tmp_path):
         assert False, "expected fail-closed routing"
     except RuntimeError as exc:
         assert "execution blocked" in str(exc)
+
+
+def test_network_v2_executor_is_registered_but_v1_remains_authoritative():
+    from v2.application import ApplicationService
+    app = ApplicationService()
+    route = app.execution_router.route("reconcile_network")
+    assert route.engine == "V1.4.1"
+    assert route.executor_available is True
+    assert "NETWORK_RECONCILIATION" in app.execution_router.v2_executors
