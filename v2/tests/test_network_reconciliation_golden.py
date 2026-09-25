@@ -156,3 +156,32 @@ def test_v2_network_reconciliation_exercises_core_decisions():
     assert "Inventory OS update required" in actions["SW-EXISTING"]
     assert actions["SW-EOL"] == "No Action" or "Retire From IS" in actions["SW-EOL"]
     assert "Catalogue update required" in actions["SW-SERIAL"]
+
+
+def test_v2_firmware_catalog_normalization_matches_golden():
+    golden = load_golden()
+    from v2.network_reconciliation import normalize_firmware_catalog_identity
+
+    samples = [
+        "",
+        "NSX-T 3.2.1",
+        "NSX 22.1.5",
+        "NSX 4.1.0",
+        "NSX 4.2.1.4",
+        "MX OS MX 18.211.5",
+        "MR OS 30.7",
+        "MX OS 18.107",
+        "MS OS MS 15.12",
+        "Infoblox NIOS 8.6.2-123456",
+        "Cisco IOS-XE 17.9.4",
+        "Cisco IOS 15.2(7)E3",
+        "Cisco FXOS 2.12.1",
+        "Cisco ASA 9.18.4",
+        "Cisco NXOS 10.2.5",
+        "Cisco ISE 3.2.0",
+        "Cisco AireOS 8.10.185",
+        "Microsoft Windows Server 2022",
+        "Unknown Firmware 99.1",
+    ]
+    for value in samples:
+        assert normalize_firmware_catalog_identity(value) == golden.normalize_firmware_catalog_identity(value)
