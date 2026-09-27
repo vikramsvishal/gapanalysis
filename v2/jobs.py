@@ -19,6 +19,7 @@ import json
 import pandas as pd
 
 from .approvals import ApprovalStore
+from .shadow_evidence import shadow_fingerprint
 
 
 def _now() -> str:
@@ -188,6 +189,12 @@ class JobManager:
                                 "mismatch_count": len(differences),
                                 "mismatches": differences[:500],
                             }
+                            shadow["fingerprints"] = shadow_fingerprint(
+                                getattr(self.service, "resources", None),
+                                payload.get("resources") or {},
+                                result,
+                                v2_result,
+                            )
                         else:
                             shadow = {
                                 "enabled": True,
