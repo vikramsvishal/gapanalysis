@@ -57,7 +57,7 @@ def test_network_v2_executor_is_registered_but_v1_remains_authoritative():
     assert "NETWORK_RECONCILIATION" in app.execution_router.v2_executors
 
 
-def test_network_shadow_uses_v2_executor_without_changing_authority():
+def test_network_shadow_uses_v2_executor_without_changing_authority(tmp_path):
     import pandas as pd
 
     class Service:
@@ -65,7 +65,13 @@ def test_network_shadow_uses_v2_executor_without_changing_authority():
         def execute_operation(self, operation, payload, progress=None):
             return pd.DataFrame([{"Action": "Load To IS", "Serial Number": "S1"}])
 
-    authority = AuthorityStore()
+    from v2.migration_decision import MigrationDecisionStore
+    from v2.migration_evidence import MigrationEvidencePackStore
+    authority = AuthorityStore(
+        MigrationDecisionStore(tmp_path / "d.json"),
+        MigrationEvidencePackStore(tmp_path / "e.json"),
+        tmp_path / "a.json",
+    )
     router = ExecutionRouter(
         authority,
         Service().execute_operation,
