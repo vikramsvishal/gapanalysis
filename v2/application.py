@@ -266,7 +266,7 @@ class ApplicationService:
     def get_migration_readiness(self, result_id: str) -> dict:
         shadow = self.get_shadow(result_id)
         classifications = [x.public() for x in self.shadow_migration.for_result(result_id)]
-        return self.migration_readiness.evaluate(shadow, classifications)
+        return self.migration_readiness.evaluate(shadow, classifications, self.migration_readiness_capability(result))
 
     def classify_shadow(self, result_id: str, row_index: int, field: str, status: str, rationale: str = "", owner: str = ""):
         record = self.shadow_migration.upsert(result_id, row_index, field, status, rationale, owner)
