@@ -123,6 +123,7 @@ class ApplicationService:
             "divergence_by_field": divergence_by_field,
             "mismatches": mismatches,
             "evidence_ids": result.evidence_ids,
+            "fingerprints": shadow.get("fingerprints"),
         }
 
     def get_shadow_migration(self, result_id: str) -> dict:
