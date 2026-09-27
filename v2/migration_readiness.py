@@ -5,6 +5,28 @@ from typing import Any
 
 APPROVED = {"EQUIVALENT", "INTENTIONAL_DIFFERENCE"}
 BLOCKING = {"POLICY_QUESTION", "V2_DEFECT", "NOT_YET_MIGRATABLE"}
+_FINGERPRINT_FIELDS = ("input_sha256", "authoritative_output_sha256", "candidate_output_sha256")
+
+
+def runtime_shadow_evidence_valid(capability_name: str, shadow: dict[str, Any] | None) -> tuple[bool, str]:
+    """Require canonical runtime fingerprints for the first V2 execution seam."""
+    if capability_name != "NETWORK_RECONCILIATION":
+        return True, ""
+    if not shadow or not shadow.get("enabled", True):
+        return False, "Runtime shadow evidence is unavailable."
+    fingerprints = shadow.get("fingerprints")
+    if not isinstance(fingerprints, dict):
+        return False, "Runtime shadow fingerprints are missing."
+    if fingerprints.get("schema_version") != "1.0":
+        return False, "Runtime shadow fingerprint schema is unsupported."
+    for field in _FINGERPRINT_FIELDS:
+        value = fingerprints.get(field)
+        if not isinstance(value, str) or len(value) != 64 or any(c not in "0123456789abcdef" for c in value.lower()):
+            return False, f"Runtime shadow fingerprint {field} is missing or invalid."
+    evidence_ids = shadow.get("evidence_ids") or []
+    if not isinstance(evidence_ids, list) or not evidence_ids:
+        return False, "Runtime shadow evidence record is missing."
+    return True, ""
 
 def capability(operation: str, domain: str = "") -> str:
     key = f"{operation}:{domain}".upper()
@@ -18,7 +40,10 @@ def capability(operation: str, domain: str = "") -> str:
     }.get(key, operation.upper() or "UNKNOWN")
 
 class MigrationReadinessGate:
-    def evaluate(self, shadow: dict[str, Any] | None, classifications: list[dict[str, Any]]) -> dict[str, Any]:
+    def evaluate(self, shadow: dict[str, Any] | None, classifications: list[dict[str, Any]], capability_name: str = "") -> dict[str, Any]:
+        runtime_valid, runtime_reason = runtime_shadow_evidence_valid(capability_name, shadow)
+        if not runtime_valid:
+            return {"status": "NOT_READY", "reason": runtime_reason, "divergence_count": 0, "unclassified_count": 0, "blocking_count": 0, "execution_authority_changed": False}
         if not shadow or not shadow.get("enabled", True):
             return {"status": "NOT_READY", "reason": "Shadow evidence is unavailable.", "divergence_count": 0, "unclassified_count": 0, "blocking_count": 0, "execution_authority_changed": False}
         divergences = shadow.get("mismatches") or []
@@ -41,7 +66,7 @@ class MigrationReadinessGate:
         grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
         for result in results:
             key = capability(result.operation, str((result.inputs or {}).get("domain", "")))
-            grouped[key].append(self.evaluate(shadow_by_result.get(result.result_id), classifications_by_result.get(result.result_id, [])))
+            grouped[key].append(self.evaluate(shadow_by_result.get(result.result_id), classifications_by_result.get(result.result_id, []), key))
         items = []
         for name, gates in sorted(grouped.items()):
             items.append({"capability": name,
