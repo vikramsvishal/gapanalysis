@@ -72,5 +72,6 @@ class MigrationReadinessGate:
             items.append({"capability": name,
                           "status": "READY_FOR_AUTHORITY_REVIEW" if gates and all(g["status"] == "READY_FOR_AUTHORITY_REVIEW" for g in gates) else "NOT_READY",
                           "result_count": len(gates), "divergence_count": sum(g["divergence_count"] for g in gates),
-                          "blocking_count": sum(g["blocking_count"] for g in gates), "unclassified_count": sum(g["unclassified_count"] for g in gates)})
+                          "blocking_count": sum(g["blocking_count"] for g in gates), "unclassified_count": sum(g["unclassified_count"] for g in gates),
+                          "execution_authority_changed": False})
         return {"authoritative_engine": "V1.4.1", "capabilities": items, "execution_authority_changed": False}
