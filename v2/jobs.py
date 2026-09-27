@@ -207,6 +207,10 @@ class JobManager:
                         }
             else:
                 result = self.service.execute_operation(operation, payload, progress=progress)
+            if shadow is None and isinstance(result, dict):
+                candidate_shadow = result.get("shadow")
+                if isinstance(candidate_shadow, dict) and candidate_shadow.get("enabled"):
+                    shadow = candidate_shadow
             if shadow is not None:
                 if isinstance(result, dict):
                     result = dict(result)
