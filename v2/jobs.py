@@ -220,7 +220,7 @@ class JobManager:
                 shadow_payload = json.dumps(shadow, sort_keys=True, separators=(",", ":"), default=str)
                 shadow_evidence = self.result_store.evidence_store.capture_text(
                     result_record.result_id,
-                    f"{operation.upper()}_SHADOW",
+                    ("HARDWARE_GOVERNANCE_SHADOW" if operation == "run_hardware_governance" else f"{operation.upper()}_SHADOW"),
                     result_record.result_id,
                     result_record.result_id + "-hardware-shadow.json",
                     shadow_payload,
