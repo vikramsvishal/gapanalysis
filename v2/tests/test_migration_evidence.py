@@ -64,3 +64,20 @@ def test_pack_survives_reload(tmp_path):
     reloaded = MigrationEvidencePackStore(path)
     assert reloaded.get(record.package_id) is not None
     assert reloaded.manifest(record.package_id)["scope"] == "CAPABILITY"
+
+
+def test_runtime_shadow_fingerprints_are_part_of_manifest(tmp_path):
+    store = _store(tmp_path)
+    inputs = _inputs()
+    inputs["capability"] = "NETWORK_RECONCILIATION"
+    inputs["manifest"]["shadow_fingerprints"] = {
+        "RES-1": {
+            "schema_version": "1.0",
+            "input_sha256": "input-hash",
+            "authoritative_output_sha256": "v1-hash",
+            "candidate_output_sha256": "v2-hash",
+        }
+    }
+    record = store.create(**inputs)
+    manifest = store.manifest(record.package_id)
+    assert manifest["evidence"]["shadow_fingerprints"]["RES-1"]["input_sha256"] == "input-hash"
