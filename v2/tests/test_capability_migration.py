@@ -7,7 +7,7 @@ def test_capability_mapping():
 
 def test_capability_gate_is_independent():
     gate = MigrationReadinessGate()
-    ready_shadow = {"enabled": True, "row_count": 1, "mismatches": []}
+    ready_shadow = {"enabled": True, "row_count": 1, "mismatches": [], "evidence_ids": ["EVID-NW-SHADOW"], "fingerprints": {"schema_version": "1.0", "input_sha256": "a" * 64, "authoritative_output_sha256": "b" * 64, "candidate_output_sha256": "c" * 64}}
     blocked_shadow = {"enabled": True, "row_count": 1, "mismatches": [{"row_index": 0, "differences": {"recommended_action": {"golden":"A","v2":"B"}}}]}
     results = [
         SimpleNamespace(result_id="R1", operation="reconcile_network", inputs={"domain":"network"}),
