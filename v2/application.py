@@ -157,9 +157,18 @@ class ApplicationService:
             readiness = {**readiness, "scope": scope}
         shadow_evidence_ids = []
         classification_ids = []
+        shadow_fingerprints = {}
         for result in selected:
+            result_shadow = shadows.get(result.result_id) or {}
+            if result_shadow.get("fingerprints"):
+                shadow_fingerprints[result.result_id] = result_shadow["fingerprints"]
+            expected_kind = (
+                "HARDWARE_GOVERNANCE_SHADOW"
+                if result.operation == "run_hardware_governance"
+                else f"{result.operation.upper()}_SHADOW"
+            )
             shadow_evidence_ids.extend(
-                [e.evidence_id for e in self.evidence.for_result(result.result_id) if e.kind == "HARDWARE_GOVERNANCE_SHADOW"]
+                [e.evidence_id for e in self.evidence.for_result(result.result_id) if e.kind == expected_kind]
             )
             classification_ids.extend(x["classification_id"] for x in classifications[result.result_id])
         audit_items = []
@@ -170,6 +179,7 @@ class ApplicationService:
         manifest = {
             "results": [r.public() for r in selected],
             "shadows": shadows,
+            "shadow_fingerprints": shadow_fingerprints,
             "classifications": classifications,
             "readiness": readiness,
             "audit": [x.public() for x in audit_items],
