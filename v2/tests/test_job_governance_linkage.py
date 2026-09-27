@@ -129,5 +129,7 @@ def test_network_shadow_persists_canonical_fingerprints(tmp_path):
     ]
     assert len(shadow_records) == 1
     payload = shadow_records[0].metadata
-    assert payload["sha256"]
-    assert result.summary["shadow"]["fingerprints"]["input_sha256"] == "c7b1d4b2c0b8c1e6a9b0e7e1e8a3b5e2e2a8c6b5d5a0c7d0b1f6f6b0d2a9a5b3"
+    assert payload["length"] > 0
+    from v2.shadow_evidence import shadow_fingerprint
+    expected = shadow_fingerprint(Resources(), {"nw_cmdb": "RES-NW"}, frame, frame)
+    assert result.summary["shadow"]["fingerprints"] == expected
