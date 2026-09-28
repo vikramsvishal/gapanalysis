@@ -93,6 +93,26 @@ class MigrationDecisionStore:
             self._persist()
         return record
 
+    def verify_integrity(self, decision_id: str) -> tuple[bool, str]:
+        """Recompute the decision hash from persisted fields to detect tampering."""
+        with self._lock:
+            record = self._items.get(decision_id)
+        if record is None:
+            return False, "Migration decision not found"
+        payload = {
+            "package_id": record.package_id,
+            "capability": record.capability,
+            "decision": record.decision,
+            "actor": record.actor,
+            "rationale": record.rationale,
+            "authoritative_engine_before": record.authoritative_engine_before,
+            "authority_changed": record.authority_changed,
+        }
+        calculated = _hash(payload)
+        if calculated != record.decision_sha256:
+            return False, "Migration decision hash does not match the persisted decision record"
+        return True, ""
+
     def get(self, decision_id: str):
         return self._items.get(decision_id)
 
