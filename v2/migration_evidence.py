@@ -128,6 +128,18 @@ class MigrationEvidencePackStore:
             self._persist()
         return record
 
+    def verify_integrity(self, package_id: str) -> tuple[bool, str]:
+        """Re-hash the persisted manifest and compare it with the immutable package hash."""
+        with self._lock:
+            package = self._items.get(package_id)
+            manifest = self._manifests.get(package_id)
+        if package is None or manifest is None:
+            return False, "Migration evidence package or manifest not found"
+        calculated = _sha256(manifest)
+        if calculated != package.manifest_sha256:
+            return False, "Migration evidence manifest hash does not match the stored package hash"
+        return True, ""
+
     def get(self, package_id: str) -> MigrationEvidencePack | None:
         with self._lock:
             return self._items.get(package_id)
