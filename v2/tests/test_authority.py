@@ -205,6 +205,13 @@ def test_activation_rejects_unready_package_and_changed_decision(tmp_path):
         readiness={"status": "READY_FOR_AUTHORITY_REVIEW"}, manifest={"capability": "NETWORK_RECONCILIATION", "case": "changed"})
     decision2 = decisions.record(package2, "APPROVE_AUTHORITY_REVIEW", "reviewer", "Approved.")
     object.__setattr__(decision2, "authority_changed", True)
+    from v2.migration_decision import _hash
+    payload = {
+        "package_id": decision2.package_id, "capability": decision2.capability,
+        "decision": decision2.decision, "actor": decision2.actor, "rationale": decision2.rationale,
+        "authoritative_engine_before": decision2.authoritative_engine_before, "authority_changed": True,
+    }
+    object.__setattr__(decision2, "decision_sha256", _hash(payload))
     authority2 = AuthorityStore(decisions, evidence, tmp_path / "authority2.json")
     try:
         authority2.activate("NETWORK_RECONCILIATION", decision2.decision_id, "operator", "Attempt.")
