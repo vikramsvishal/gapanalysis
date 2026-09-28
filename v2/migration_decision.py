@@ -105,6 +105,7 @@ class MigrationDecisionStore:
             "decision": record.decision,
             "actor": record.actor,
             "rationale": record.rationale,
+            "package_manifest_sha256": record.package_manifest_sha256,
             "authoritative_engine_before": record.authoritative_engine_before,
             "authority_changed": record.authority_changed,
         }
