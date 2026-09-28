@@ -209,6 +209,7 @@ def test_activation_rejects_unready_package_and_changed_decision(tmp_path):
     payload = {
         "package_id": decision2.package_id, "capability": decision2.capability,
         "decision": decision2.decision, "actor": decision2.actor, "rationale": decision2.rationale,
+        "package_manifest_sha256": decision2.package_manifest_sha256,
         "authoritative_engine_before": decision2.authoritative_engine_before, "authority_changed": True,
     }
     object.__setattr__(decision2, "decision_sha256", _hash(payload))
