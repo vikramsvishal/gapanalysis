@@ -98,6 +98,12 @@ class AuthorityStore:
         decision = self.decision_store.get(decision_id)
         if decision is None:
             raise ValueError("Migration decision not found")
+        decision_integrity, decision_reason = self.decision_store.verify_integrity(decision_id)
+        if not decision_integrity:
+            raise ValueError(decision_reason)
+        package_integrity, package_reason = self.evidence_store.verify_integrity(decision.package_id)
+        if not package_integrity:
+            raise ValueError(package_reason)
         if decision.decision != "APPROVE_AUTHORITY_REVIEW":
             raise ValueError("Only an APPROVE_AUTHORITY_REVIEW decision can be activated")
         package = self.evidence_store.get(decision.package_id)
