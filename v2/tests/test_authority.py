@@ -164,7 +164,7 @@ def test_activation_rejects_manifest_binding_mismatch(tmp_path):
         authority.activate("NETWORK_RECONCILIATION", decision.decision_id, "operator", "Attempt.")
         assert False, "expected stale binding rejection"
     except ValueError as exc:
-        assert "authority change" in str(exc)
+        assert "decision hash" in str(exc)
 
 
 def test_activation_rejects_tampered_evidence_manifest(tmp_path):
@@ -218,7 +218,7 @@ def test_activation_rejects_unready_package_and_changed_decision(tmp_path):
         authority2.activate("NETWORK_RECONCILIATION", decision2.decision_id, "operator", "Attempt.")
         assert False, "expected changed-authority rejection"
     except ValueError as exc:
-        assert "decision hash" in str(exc)
+        assert "authority change" in str(exc)
 
 
 def test_activation_requires_actor_and_rationale(tmp_path):
