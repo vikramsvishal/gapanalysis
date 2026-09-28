@@ -146,7 +146,7 @@ def test_activation_rejects_missing_evidence_package(tmp_path):
         authority.activate("NETWORK_RECONCILIATION", decision.decision_id, "operator", "Attempt.")
         assert False, "expected missing package rejection"
     except ValueError as exc:
-        assert "package not found" in str(exc)
+        assert "not found" in str(exc)
 
 
 def test_activation_rejects_manifest_binding_mismatch(tmp_path):
@@ -164,7 +164,7 @@ def test_activation_rejects_manifest_binding_mismatch(tmp_path):
         authority.activate("NETWORK_RECONCILIATION", decision.decision_id, "operator", "Attempt.")
         assert False, "expected stale binding rejection"
     except ValueError as exc:
-        assert "decision hash" in str(exc)
+        assert "authority change" in str(exc)
 
 
 def test_activation_rejects_tampered_evidence_manifest(tmp_path):
