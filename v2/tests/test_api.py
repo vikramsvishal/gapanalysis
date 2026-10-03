@@ -95,3 +95,81 @@ def test_result_shadow_endpoint_returns_404_when_shadow_is_unavailable(monkeypat
     response = client.get("/api/results/RES-NO-SHADOW/shadow")
 
     assert response.status_code == 404
+
+
+def test_authority_endpoint_is_human_controlled(monkeypatch):
+    from types import SimpleNamespace
+    from api import main
+
+    calls = {}
+    state = SimpleNamespace(public=lambda: {
+        "capability": "NETWORK_RECONCILIATION",
+        "engine": "V1.4.1",
+        "status": "ACTIVE",
+    })
+    monkeypatch.setattr(main._service, "get_authority", lambda capability: state)
+
+    response = client.get("/api/authority/NETWORK_RECONCILIATION")
+    assert response.status_code == 200
+    assert response.json()["engine"] == "V1.4.1"
+
+    def activate(capability, decision_id, actor, rationale):
+        calls.update(capability=capability, decision_id=decision_id, actor=actor, rationale=rationale)
+        return state
+
+    monkeypatch.setattr(main._service, "activate_authority", activate)
+    response = client.post(
+        "/api/authority/NETWORK_RECONCILIATION/activate",
+        json={"decision_id": "DEC-1", "actor": "reviewer", "rationale": "Explicit review-approved activation."},
+    )
+    assert response.status_code == 200
+    assert calls == {
+        "capability": "NETWORK_RECONCILIATION",
+        "decision_id": "DEC-1",
+        "actor": "reviewer",
+        "rationale": "Explicit review-approved activation.",
+    }
+
+
+def test_authority_activation_errors_are_conflict_responses(monkeypatch):
+    from api import main
+
+    def reject(*args, **kwargs):
+        raise ValueError("Migration decision not approved")
+
+    monkeypatch.setattr(main._service, "activate_authority", reject)
+    response = client.post(
+        "/api/authority/NETWORK_RECONCILIATION/activate",
+        json={"decision_id": "DEC-REJECTED", "actor": "reviewer", "rationale": "Attempt."},
+    )
+    assert response.status_code == 409
+    assert response.json()["detail"] == "Migration decision not approved"
+
+
+def test_authority_rollback_requires_explicit_request(monkeypatch):
+    from types import SimpleNamespace
+    from api import main
+
+    calls = {}
+    state = SimpleNamespace(public=lambda: {
+        "capability": "NETWORK_RECONCILIATION",
+        "engine": "V1.4.1",
+        "status": "ACTIVE",
+        "previous_engine": "V2",
+    })
+
+    def rollback(capability, actor, rationale):
+        calls.update(capability=capability, actor=actor, rationale=rationale)
+        return state
+
+    monkeypatch.setattr(main._service, "rollback_authority", rollback)
+    response = client.post(
+        "/api/authority/NETWORK_RECONCILIATION/rollback",
+        json={"actor": "operator", "rationale": "Controlled rollback validation."},
+    )
+    assert response.status_code == 200
+    assert calls == {
+        "capability": "NETWORK_RECONCILIATION",
+        "actor": "operator",
+        "rationale": "Controlled rollback validation.",
+    }
