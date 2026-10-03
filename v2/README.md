@@ -15,7 +15,32 @@ v2/
   legacy_adapter.py     Transitional access to V1.4.1 logic
   normalization.py      V2 facade over golden normalization behavior
   catalog.py            Deterministic authoritative catalog resolver
+  hardware_governance.py Stable hardware-governance service seam
+  catalog_matching.py   Extracted V1.4.1 hardware catalog matching engine
 ```
+
+## Hardware catalog matching extraction
+
+The current `HardwareCatalogMatcher` is intentionally behavior-preserving. It extracts the V1.4.1 `_hw_index()` and `hardware_match()` behavior into a deterministic, independently testable component.
+
+The extracted engine currently preserves:
+
+- indexed hardware-model matching
+- server manufacturer + model matching
+- model-only matching
+- legacy composite-index behavior
+- token-overlap candidate matching
+- ambiguity detection
+- V1.4.1 status/detail/score values
+
+It is **not yet the governance authority**. The protected V1.4.1 engine remains authoritative for end-to-end hardware governance until the full domain is regression-covered. The catalog identity resolution seam is now explicit through `AuthoritativeHardwareCatalogResolver`. It consumes matcher candidates but enforces the governance distinction between candidate identity and authorized catalog value:
+
+- exact catalog identity can be load-authorized;
+- partial/similarity candidates remain review-only;
+- ambiguous candidates remain blocked/review-only;
+- no-match conditions remain catalog-update-required.
+
+The resolver is exposed by `HardwareGovernanceService.resolve_catalog_identity()`, but the protected V1.4.1 end-to-end hardware workflow still remains the execution oracle. The next extraction step is category presence/dependency governance, followed by shadow equivalence against V1.4.1 before any execution path is switched.
 
 ## Migration strategy
 
@@ -36,3 +61,33 @@ v2/
 - No-match conditions can produce a catalog-update-required state.
 - FQDN requirements remain policy-driven and human-in-the-loop where required.
 - Source evidence, normalized evidence, current IS state, required value and load value remain separate concepts.
+
+## Enterprise UI
+
+The V2 branch includes a React + Vite enterprise UI under `web/`. The UI is intentionally an application shell over the governance engine, not a second implementation of business rules. Current screens cover the portal shell, governance overview, reconciliation workspace, governance decisions, jobs, exceptions and audit/evidence areas. The HTTP API seam is defined separately so real execution can be wired without moving governance logic into the browser.
+
+
+## Category dependency governance seam
+
+Hardware governance now exposes category presence/dependency as an independent deterministic service through `CategoryDependencyGovernance` and `HardwareGovernanceService.resolve_category_dependency()`.
+
+The current V1.4.1 outcomes are represented explicitly:
+
+- existing operational/production category → `LOAD OS ONLY`
+- missing category → `LOAD CATEGORY AND OS`
+- duplicate normalized category serial → `CATEGORY DATA QUALITY REVIEW`
+- non-operational category does not satisfy the parent dependency
+
+This seam is currently additive and regression-tested. The protected V1.4.1 end-to-end hardware workflow remains authoritative. The next step is a shadow composition of catalog resolution + category dependency + lifecycle/load eligibility, followed by equivalence testing against the full V1.4.1 hardware decisions.
+
+
+## Hardware governance decision composition
+
+The category-dependency and authoritative catalog seams are now composed through `HardwareGovernanceDecisionComposer`. The composer consumes already-resolved signals and produces the stable `GovernanceDecision` contract.
+
+Decision precedence is explicit: out-of-scope/non-operational records are no-action; no authoritative catalog match requires catalog update; ambiguous catalog identity requires review; duplicate category dependency requires review; missing category produces category-plus-OS load; an existing production category produces OS-only load. This is additive and test-protected; V1.4.1 remains the execution oracle until shadow equivalence is complete.
+
+
+## Hardware governance shadow equivalence
+
+A comparison seam now projects the protected V1.4.1 hardware decision fields and the V2 composed decision into a common shape. The current tests cover existing-category, missing-category, and duplicate-category outcomes. This remains a shadow harness: it does not alter V1.4.1 execution.
