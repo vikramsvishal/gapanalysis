@@ -185,3 +185,58 @@ def test_v2_firmware_catalog_normalization_matches_golden():
     ]
     for value in samples:
         assert normalize_firmware_catalog_identity(value) == golden.normalize_firmware_catalog_identity(value)
+
+
+def test_serial_placeholders_are_absent_identity_and_not_matchable():
+    from v2.normalization import serial_key
+
+    values = [
+        "NA", "N/A", "NA Virtual", "N/A virtual",
+        "None", "NONE", "null", "Not Available",
+        "Not Applicable Virtual", " unknown ",
+    ]
+    assert all(serial_key(value) == "" for value in values)
+    assert serial_key("SN-REAL-001") == "snreal001"
+
+
+def test_network_reconciliation_does_not_use_placeholder_serial_as_identity():
+    cm, isr, cat, fi = _inputs()
+    cm.loc[0, "Serial number"] = "N/A virtual"
+    isr.loc[0, "hostname"] = "UNRELATED-HOST"
+    isr.loc[0, "os_parent_serial_number"] = "NA Virtual"
+
+    result = NetworkReconciliationExecutor().execute(cm, isr, cat, fi)
+    row = result.loc[result["Configuration Item"] == "SW-NEW"].iloc[0]
+
+    # Hostname no longer matches and the placeholder serial must not create
+    # a false Serial Match Different Hostname.
+    assert row["Present in IS ?"] == "No"
+    assert "Load To IS" in row["Action"]
+
+
+def test_category_governance_ignores_placeholder_serials():
+    import pandas as pd
+    from v2.category_governance import CategoryDependencyGovernance
+    from v2.normalization import lifecycle, serial_key
+
+    category = pd.DataFrame([
+        {
+            "network_serial_number": "NA Virtual",
+            "network_lifecycle_status": "Production",
+            "network_opaque_id": "CAT-PLACEHOLDER",
+        },
+        {
+            "network_serial_number": "SN-REAL-001",
+            "network_lifecycle_status": "Production",
+            "network_opaque_id": "CAT-REAL",
+        },
+    ])
+    governance = CategoryDependencyGovernance(lifecycle, serial_key)
+
+    missing = governance.evaluate("network", "N/A virtual", category)
+    assert missing.category_presence_status == "MISSING FROM CATEGORY"
+    assert missing.parent_opaque_id == ""
+
+    found = governance.evaluate("network", "SN-REAL-001", category)
+    assert found.category_presence_status == "FOUND IN CATEGORY"
+    assert found.parent_opaque_id == "CAT-REAL"
