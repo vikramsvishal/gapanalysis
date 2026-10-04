@@ -17,6 +17,7 @@ from .category_governance import CategoryDependencyGovernance
 from .hardware_decision import HardwareGovernanceDecisionComposer, HardwareGovernanceSignals
 from .hardware_equivalence import v2_decision_projection
 from .legacy_adapter import load_golden
+from .normalization import lifecycle, serial_key
 
 
 @dataclass(frozen=True)
@@ -64,7 +65,7 @@ class HardwareGovernanceService:
     def resolve_category_dependency(self, domain: str, serial_number: str, category):
         """Resolve category presence independently from hardware identity matching."""
         golden = load_golden()
-        governance = CategoryDependencyGovernance(golden.lifecycle, golden.serial_key)
+        governance = CategoryDependencyGovernance(lifecycle, serial_key)
         return governance.evaluate(domain, serial_number, category)
 
     def resolve_catalog_identity(
@@ -124,7 +125,7 @@ class HardwareGovernanceService:
         manufacturer_col = golden.find_col(cmdb, "Manufacturer")
         model_col = golden.find_col(cmdb, "Model number" if request.domain == "network" else "Model ID")
         life_col = golden.find_col(cmdb, "Life Cycle Stage")
-        category_governance = CategoryDependencyGovernance(golden.lifecycle, golden.serial_key)
+        category_governance = CategoryDependencyGovernance(lifecycle, serial_key)
         resolver = AuthoritativeHardwareCatalogResolver(catalog)
         mismatches = []
         row_count = len(cmdb)
