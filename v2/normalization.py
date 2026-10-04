@@ -131,6 +131,15 @@ def find_col(df: pd.DataFrame, *aliases: str, required: bool = True) -> Optional
     return None
 
 
+def sanitize_serial_placeholders(df: pd.DataFrame, aliases: tuple[str, ...] = ("Serial number", "Serial Number", "os_parent_serial_number", "server_serial_number", "network_serial_number")) -> pd.DataFrame:
+    """Blank known serial placeholders before any identity/deduplication check."""
+    result = df.copy()
+    for column in result.columns:
+        if hkey(column) not in {hkey(alias) for alias in aliases}:
+            continue
+        result[column] = result[column].map(lambda value: "" if not serial_key(value) else value)
+    return result
+
 def normalize_identity(
     hostname: Any = "", fqdn: Any = "", serial: Any = "", ip: Any = ""
 ) -> dict:
