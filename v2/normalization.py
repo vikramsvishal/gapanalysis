@@ -42,8 +42,30 @@ def lifecycle(v: Any) -> str:
     }.get(pkey(v), clean(v).lower())
 
 
+SERIAL_PLACEHOLDER_KEYS = {
+    "", "na", "nan", "none", "null", "nil", "unknown",
+    "notavailable", "notapplicable", "notprovided", "notpresent",
+    "notknown", "tbd", "navirtual", "nonevirtual", "unknownvirtual",
+    "notavailablevirtual", "notapplicablevirtual",
+}
+
+
 def serial_key(v: Any) -> str:
-    return re.sub(r"[^a-z0-9]", "", clean(v).lower())
+    """Return a deduplication key only for a real serial identifier.
+
+    Inventory placeholders such as NA, N/A, NA Virtual, N/A virtual,
+    None and equivalent normalized forms are absence, not identifiers.
+    The original display value is intentionally preserved in output;
+    only the identity key is blank.
+    """
+    key = re.sub(r"[^a-z0-9]", "", clean(v).lower())
+    if key in SERIAL_PLACEHOLDER_KEYS:
+        return ""
+    if key.endswith("virtual") and key[:-7] in {
+        "na", "none", "unknown", "notavailable", "notapplicable"
+    }:
+        return ""
+    return key
 
 
 def normalize_hostname(v: Any) -> str:
