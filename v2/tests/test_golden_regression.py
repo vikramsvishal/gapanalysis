@@ -110,3 +110,31 @@ def test_field_resolution_matches_golden(golden):
     for aliases in [("Host Name",), ("Serial Number",), ("IP Address",)]:
         assert v2n.find_col(df, *aliases) == golden.find_col(df, *aliases)
     assert v2n.find_col(df, "Missing", required=False) == golden.find_col(df, "Missing", required=False)
+
+
+def test_reconciliation_boundary_blanks_serial_placeholders_before_golden_execution():
+    import pandas as pd
+    from types import SimpleNamespace
+    from v2.services import GovernanceService
+
+    class FakeEngine:
+        def read_tabular(self, _path):
+            return pd.DataFrame({
+                "Configuration Item": ["SW-01"],
+                "Serial number": ["N/A virtual"],
+                "os_parent_serial_number": ["NA"],
+                "Server Serial Number": ["None"],
+                "Other": ["NA"],
+            })
+
+    class FakeResources:
+        def get(self, _resource_id):
+            return SimpleNamespace(status="AVAILABLE", stored_path="input.xlsx")
+
+    service = GovernanceService(engine=FakeEngine(), resources=FakeResources())
+    frame = service._tabular({"resources": {"nw_cmdb": "RES-NW"}}, "nw_cmdb", sanitize_serials=True)
+
+    assert frame.loc[0, "Serial number"] == ""
+    assert frame.loc[0, "os_parent_serial_number"] == ""
+    assert frame.loc[0, "Server Serial Number"] == ""
+    assert frame.loc[0, "Other"] == "NA"
