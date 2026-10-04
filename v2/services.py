@@ -8,6 +8,7 @@ from .legacy_adapter import load_golden
 from .resources import ResourceManager
 from .approvals import candidate_id
 from .hardware_governance import HardwareGovernanceRequest, HardwareGovernanceService
+from .normalization import sanitize_serial_placeholders
 
 
 class GovernanceService:
@@ -56,8 +57,9 @@ class GovernanceService:
             raise FileNotFoundError(f"Resource is unavailable: {resource_id}")
         return record
 
-    def _tabular(self, payload: dict[str, Any], kind: str):
-        return self.engine.read_tabular(self._record(payload, kind).stored_path)
+    def _tabular(self, payload: dict[str, Any], kind: str, sanitize_serials: bool = False):
+        frame = self.engine.read_tabular(self._record(payload, kind).stored_path)
+        return sanitize_serial_placeholders(frame) if sanitize_serials else frame
 
     def _field_intelligence(self, payload: dict[str, Any]):
         fi = self.engine.FieldIntelligence()
@@ -76,8 +78,8 @@ class GovernanceService:
         self._require_ready(operation, payload)
         from .network_reconciliation import NetworkReconciliationExecutor
         return NetworkReconciliationExecutor().execute(
-            self._tabular(payload, "nw_cmdb"),
-            self._tabular(payload, "is_os"),
+            self._tabular(payload, "nw_cmdb", sanitize_serials=True),
+            self._tabular(payload, "is_os", sanitize_serials=True),
             self._tabular(payload, "catalog_os"),
             self._field_intelligence(payload),
             progress,
@@ -86,12 +88,12 @@ class GovernanceService:
     def _execute_resource_operation(self, operation: str, payload: dict[str, Any], progress):
         if operation == "reconcile_network":
             return self.engine.reconcile_nw(
-                self._tabular(payload, "nw_cmdb"), self._tabular(payload, "is_os"),
+                self._tabular(payload, "nw_cmdb", sanitize_serials=True), self._tabular(payload, "is_os", sanitize_serials=True),
                 self._tabular(payload, "catalog_os"), self._field_intelligence(payload), progress,
             )
         if operation == "reconcile_server":
             return self.engine.reconcile_server(
-                self._tabular(payload, "server_cmdb"), self._tabular(payload, "is_os"),
+                self._tabular(payload, "server_cmdb", sanitize_serials=True), self._tabular(payload, "is_os", sanitize_serials=True),
                 self._tabular(payload, "catalog_os"), self._field_intelligence(payload), progress,
             )[0]
         if operation == "run_hardware_governance":
