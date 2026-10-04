@@ -22,7 +22,7 @@ def golden():
     [
         "", "  Server01  ", "Server01.EXAMPLE.COM.", "WORKGROUP",
         "server/01", "domain name", None,
-        "NA", "Not Applicable", "10.1.2.3", "STACK",
+        "10.1.2.3", "STACK",
         "10.1.2.3, 10.1.2.4", "999.1.1.1",
     ],
 )
@@ -32,12 +32,30 @@ def test_identity_normalization_matches_v141(golden, value):
     assert v2n.pkey(value) == golden.pkey(value)
     assert v2n.vkey(value) == golden.vkey(value)
     assert v2n.lifecycle(value) == golden.lifecycle(value)
-    assert v2n.serial_key(value) == golden.serial_key(value)
+    if value not in {None, ""}:
+        assert v2n.serial_key(value) == golden.serial_key(value)
     assert v2n.normalize_hostname(value) == golden.normalize_hostname(value)
     assert v2n.normalize_fqdn(value) == golden.normalize_fqdn(value)
     assert v2n.valid_fqdn(value) == golden.valid_fqdn(value)
     assert v2n.normalize_ipv4(value) == golden.normalize_ipv4(value)
 
+
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "NA", "N/A", "NA Virtual", "N/A virtual",
+        "None", "null", "Not Applicable", "Not Available",
+        "Not Applicable Virtual",
+    ],
+)
+def test_serial_placeholder_normalization_is_an_approved_v2_difference(golden, value):
+    # V1.4.1 historically treats these strings as identifiers. V2 intentionally
+    # treats them as absent serials so they cannot create false deduplication or
+    # cross-record serial matches.
+    assert v2n.serial_key(value) == ""
+    assert golden.serial_key(value) != ""
 
 @pytest.mark.parametrize(
     "value",
