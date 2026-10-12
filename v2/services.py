@@ -124,6 +124,7 @@ class GovernanceService:
             load_df = self.engine.read_load_to_is_file(
                 self._record(payload, load_kind).stored_path, domain, progress
             )
+            load_df = sanitize_serial_placeholders(load_df)
             governance = self.category_decisions_from_load(
                 domain, load_df, self._record(payload, category_kind).stored_path, progress
             )
@@ -233,6 +234,7 @@ class GovernanceService:
         load_df = self.engine.read_load_to_is_file(
             self._record(payload, load_kind).stored_path, approval.domain
         )
+        load_df = sanitize_serial_placeholders(load_df)
         governance = self.category_decisions_from_load(
             approval.domain, load_df, self._record(payload, category_kind).stored_path
         )
@@ -337,6 +339,7 @@ class GovernanceService:
         load_kind = "nw_load_to_is" if domain == "network" else "server_load_to_is"
         category_kind = "is_network_category" if domain == "network" else "is_server_category"
         load_df = self.engine.read_load_to_is_file(self._record({"resources": payload.get("resources") or {}}, load_kind).stored_path, domain)
+        load_df = sanitize_serial_placeholders(load_df)
         decisions = self.category_decisions_from_load(domain, load_df, self._record({"resources": payload.get("resources") or {}}, category_kind).stored_path)
         blocked = int(decisions["decisions"]["Recommended Action"].isin(["CATEGORY DATA QUALITY REVIEW", "NO LOAD ACTION"]).sum()) if not decisions["decisions"].empty and "Recommended Action" in decisions["decisions"].columns else 0
         missing_fqdn = sum(1 for _, row in load_df.iterrows() if not self.engine.valid_fqdn(row.get("Fully qualified domain name", "")))
