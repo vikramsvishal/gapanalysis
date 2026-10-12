@@ -131,7 +131,7 @@ def find_col(df: pd.DataFrame, *aliases: str, required: bool = True) -> Optional
     return None
 
 
-def sanitize_serial_placeholders(df: pd.DataFrame, aliases: tuple[str, ...] = ("Serial number", "Serial Number", "os_parent_serial_number", "server_serial_number", "network_serial_number")) -> pd.DataFrame:
+def sanitize_serial_placeholders(df: pd.DataFrame, aliases: tuple[str, ...] = ("Serial number", "Serial Number", "serial_number", "os_parent_serial_number", "server_serial_number", "network_serial_number")) -> pd.DataFrame:
     """Blank known serial placeholders before any identity/deduplication check."""
     result = df.copy()
     for column in result.columns:
