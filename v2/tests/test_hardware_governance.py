@@ -133,7 +133,7 @@ def test_hardware_governance_sanitizes_serial_placeholders_without_mutating_sour
     }])
     original_catalog = pd.DataFrame([{
         "manufacturer": "Cisco", "hardware_type": "Switch",
-        "hardware_model": "C9300-48P", "opaque_id": "HW-1",
+        "hardware_model": "C9300-48P", "subcategory": "Access Switch", "opaque_id": "HW-1",
     }])
     original_cmdb.to_excel(cmdb_path, index=False)
     original_category.to_excel(category_path, index=False)
