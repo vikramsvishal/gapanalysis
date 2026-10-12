@@ -233,7 +233,7 @@ class GovernanceService:
         load_df = self.engine.read_load_to_is_file(
             self._record(payload, load_kind).stored_path, approval.domain
         )
-        governance = self.engine.category_decisions_from_load(
+        governance = self.category_decisions_from_load(
             approval.domain, load_df, self._record(payload, category_kind).stored_path
         )
         rejected_rows = {
@@ -249,7 +249,7 @@ class GovernanceService:
 
         # Re-evaluate governance against exactly the approved candidate set so
         # the golden generator receives a decision frame aligned to its input.
-        approved_governance = self.engine.category_decisions_from_load(
+        approved_governance = self.category_decisions_from_load(
             approval.domain, approved_df, self._record(payload, category_kind).stored_path
         )
         fmt = "xlsx"
@@ -337,7 +337,7 @@ class GovernanceService:
         load_kind = "nw_load_to_is" if domain == "network" else "server_load_to_is"
         category_kind = "is_network_category" if domain == "network" else "is_server_category"
         load_df = self.engine.read_load_to_is_file(self._record({"resources": payload.get("resources") or {}}, load_kind).stored_path, domain)
-        decisions = self.engine.category_decisions_from_load(domain, load_df, self._record({"resources": payload.get("resources") or {}}, category_kind).stored_path)
+        decisions = self.category_decisions_from_load(domain, load_df, self._record({"resources": payload.get("resources") or {}}, category_kind).stored_path)
         blocked = int(decisions["decisions"]["Recommended Action"].isin(["CATEGORY DATA QUALITY REVIEW", "NO LOAD ACTION"]).sum()) if not decisions["decisions"].empty and "Recommended Action" in decisions["decisions"].columns else 0
         missing_fqdn = sum(1 for _, row in load_df.iterrows() if not self.engine.valid_fqdn(row.get("Fully qualified domain name", "")))
         return {**check, "candidate_count": len(load_df), "missing_fqdn_count": missing_fqdn, "blocked_category_candidates": blocked, "ready_for_review": blocked == 0}
