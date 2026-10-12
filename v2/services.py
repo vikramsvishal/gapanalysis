@@ -315,7 +315,17 @@ class GovernanceService:
         args, kwargs = self._sanitize_reconciliation_inputs(args, kwargs)
         return self.engine.reconcile_server(*args,**kwargs)
     def run_hardware_governance(self,*args,**kwargs): return self.engine.run_hardware_governance(*args,**kwargs)
-    def generate_bulk_load(self,*args,**kwargs): return self.engine.generate_bulk_load(*args,**kwargs)
+    def generate_bulk_load(self, *args, **kwargs):
+        """Protect direct load generation from placeholder serials as well."""
+        sanitized_args = list(args)
+        if sanitized_args and hasattr(sanitized_args[0], "columns"):
+            sanitized_args[0] = sanitize_serial_placeholders(sanitized_args[0])
+        sanitized_kwargs = dict(kwargs)
+        for name in ("load_df", "load_frame", "candidates"):
+            value = sanitized_kwargs.get(name)
+            if hasattr(value, "columns"):
+                sanitized_kwargs[name] = sanitize_serial_placeholders(value)
+        return self.engine.generate_bulk_load(*sanitized_args, **sanitized_kwargs)
     def category_decisions_from_load(self, domain, load_df, category_path, *args, **kwargs):
         """Sanitize serial placeholders before category matching without mutating inputs."""
         sanitized_load = sanitize_serial_placeholders(load_df) if hasattr(load_df, "columns") else load_df
