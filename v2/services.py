@@ -314,7 +314,38 @@ class GovernanceService:
     def reconcile_server(self,*args,**kwargs):
         args, kwargs = self._sanitize_reconciliation_inputs(args, kwargs)
         return self.engine.reconcile_server(*args,**kwargs)
-    def run_hardware_governance(self,*args,**kwargs): return self.engine.run_hardware_governance(*args,**kwargs)
+    def run_hardware_governance(self, *args, **kwargs):
+        """Sanitize direct path-based hardware-governance inputs without editing sources."""
+        positional = list(args)
+        keyword = dict(kwargs)
+        path_positions = (1, 2, 7)  # CMDB, category, optional IS OS evidence
+        with TemporaryDirectory(prefix="v2-direct-hw-governance-") as temp_dir:
+            def safe_path(value, name):
+                if not isinstance(value, (str, Path)) or not Path(value).is_file():
+                    return value
+                source = Path(value)
+                frame = sanitize_serial_placeholders(self.engine.read_tabular(str(source)))
+                suffix = source.suffix.lower() or ".xlsx"
+                target = Path(temp_dir) / (name + suffix)
+                if suffix == ".csv":
+                    frame.to_csv(target, index=False)
+                else:
+                    frame.to_excel(target, index=False)
+                return str(target)
+
+            for index in path_positions:
+                if index < len(positional):
+                    positional[index] = safe_path(positional[index], f"input-{index}")
+            for key in ("cmdb_path", "cmdb", "category_path", "is_category_path", "is_os_path"):
+                if key in keyword:
+                    keyword[key] = safe_path(keyword[key], key)
+            for index in (6,):
+                if index < len(positional) and hasattr(positional[index], "columns"):
+                    positional[index] = sanitize_serial_placeholders(positional[index])
+            for key in ("os_reconciliation", "reconciliation_df"):
+                if hasattr(keyword.get(key), "columns"):
+                    keyword[key] = sanitize_serial_placeholders(keyword[key])
+            return self.engine.run_hardware_governance(*positional, **keyword)
     def generate_bulk_load(self, *args, **kwargs):
         """Protect direct load generation from placeholder serials as well."""
         sanitized_args = list(args)
