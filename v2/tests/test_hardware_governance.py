@@ -111,3 +111,52 @@ def test_hardware_governance_exposes_shadow_without_changing_golden(tmp_path):
     assert result.decisions.equals(raw["decisions"])
     assert result.shadow["enabled"] is True
     assert result.shadow["mismatch_count"] == 0
+
+
+def test_hardware_governance_sanitizes_serial_placeholders_without_mutating_sources(tmp_path):
+    import pandas as pd
+
+    cmdb_path = tmp_path / "cmdb.xlsx"
+    category_path = tmp_path / "category.xlsx"
+    catalog_path = tmp_path / "catalog.xlsx"
+    original_cmdb = pd.DataFrame([{
+        "Configuration Item": "sw01",
+        "Serial number": "N/A Virtual",
+        "Manufacturer": "Cisco",
+        "Model number": "C9300-48P",
+        "Life Cycle Stage": "Operational",
+    }])
+    original_category = pd.DataFrame([{
+        "network_serial_number": "NA",
+        "network_opaque_id": "CAT-1",
+        "network_lifecycle_status": "Production",
+    }])
+    original_catalog = pd.DataFrame([{
+        "manufacturer": "Cisco", "hardware_type": "Switch",
+        "hardware_model": "C9300-48P", "opaque_id": "HW-1",
+    }])
+    original_cmdb.to_excel(cmdb_path, index=False)
+    original_category.to_excel(category_path, index=False)
+    original_catalog.to_excel(catalog_path, index=False)
+
+    class InspectingEngine:
+        def run_hardware_governance(self, domain, cmdb, category, catalog, outdir, *args, **kwargs):
+            assert domain == "network"
+            assert pd.read_excel(cmdb).loc[0, "Serial number"] == ""
+            assert pd.read_excel(category).loc[0, "network_serial_number"] == ""
+            return {
+                "decisions": pd.DataFrame(),
+                "category_load": pd.DataFrame(),
+                "candidate_ids": set(),
+                "outputs": [],
+            }
+
+    request = HardwareGovernanceRequest(
+        "network", str(cmdb_path), str(category_path), str(catalog_path),
+        str(tmp_path / "outputs"), False,
+    )
+    result = HardwareGovernanceService(InspectingEngine()).execute(request)
+
+    assert result.engine == "V1.4.1"
+    assert pd.read_excel(cmdb_path).loc[0, "Serial number"] == "N/A Virtual"
+    assert pd.read_excel(category_path).loc[0, "network_serial_number"] == "NA"
