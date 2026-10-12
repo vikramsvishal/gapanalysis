@@ -314,7 +314,22 @@ class GovernanceService:
         return self.engine.reconcile_server(*args,**kwargs)
     def run_hardware_governance(self,*args,**kwargs): return self.engine.run_hardware_governance(*args,**kwargs)
     def generate_bulk_load(self,*args,**kwargs): return self.engine.generate_bulk_load(*args,**kwargs)
-    def category_decisions_from_load(self,*args,**kwargs): return self.engine.category_decisions_from_load(*args,**kwargs)
+    def category_decisions_from_load(self, domain, load_df, category_path, *args, **kwargs):
+        """Sanitize serial placeholders before category matching without mutating inputs."""
+        sanitized_load = sanitize_serial_placeholders(load_df) if hasattr(load_df, "columns") else load_df
+        source_path = Path(category_path) if isinstance(category_path, (str, Path)) else None
+        if source_path is None or not source_path.is_file():
+            return self.engine.category_decisions_from_load(domain, sanitized_load, category_path, *args, **kwargs)
+
+        with TemporaryDirectory(prefix="v2-category-decisions-") as temp_dir:
+            suffix = source_path.suffix.lower() or ".xlsx"
+            target_path = Path(temp_dir) / (source_path.stem + suffix)
+            category_frame = sanitize_serial_placeholders(self.engine.read_tabular(str(source_path)))
+            if suffix == ".csv":
+                category_frame.to_csv(target_path, index=False)
+            else:
+                category_frame.to_excel(target_path, index=False)
+            return self.engine.category_decisions_from_load(domain, sanitized_load, str(target_path), *args, **kwargs)
     def bulk_preflight(self, domain: str, payload: dict[str, Any]) -> dict[str, Any]:
         check = self.preflight("generate_bulk_load", {"domain": domain, "resources": payload.get("resources") or {}})
         if not check["ready"]:
