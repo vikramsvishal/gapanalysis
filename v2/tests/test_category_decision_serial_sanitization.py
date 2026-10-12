@@ -37,3 +37,19 @@ def test_category_decisions_sanitize_load_and_category_serial_placeholders(tmp_p
     assert "decisions" in result
     assert candidate_frame.loc[0, "Serial number"] == "N/A"
     assert pd.read_excel(category_path, keep_default_na=False).loc[0, "network_serial_number"] == "NA Virtual"
+
+
+def test_server_category_serial_number_alias_is_sanitized_without_mutating_input():
+    import pandas as pd
+    from v2.normalization import sanitize_serial_placeholders
+
+    source = pd.DataFrame({
+        "serial_number": ["N/A Virtual", "SN-123"],
+        "description": ["NA", "real description"],
+    })
+
+    sanitized = sanitize_serial_placeholders(source)
+
+    assert sanitized["serial_number"].tolist() == ["", "SN-123"]
+    assert sanitized["description"].tolist() == ["NA", "real description"]
+    assert source["serial_number"].tolist() == ["N/A Virtual", "SN-123"]
