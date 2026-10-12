@@ -283,8 +283,34 @@ class GovernanceService:
             raise ValueError(f"Unsupported governance operation: {operation}")
         return target(*args, **kwargs)
 
-    def reconcile_network(self,*args,**kwargs): return self.engine.reconcile_nw(*args,**kwargs)
-    def reconcile_server(self,*args,**kwargs): return self.engine.reconcile_server(*args,**kwargs)
+    @staticmethod
+    def _sanitize_reconciliation_inputs(args, kwargs):
+        """Sanitize serial placeholders on every public reconciliation entry point.
+
+        DataFrames are copied by sanitize_serial_placeholders, so callers' source
+        frames remain unchanged. Positional CMDB/IS inputs are handled first; the
+        aliases cover callers that invoke the service with keyword arguments.
+        """
+        sanitized_args = list(args)
+        for index in (0, 1):
+            if index < len(sanitized_args) and hasattr(sanitized_args[index], "columns"):
+                sanitized_args[index] = sanitize_serial_placeholders(sanitized_args[index])
+
+        sanitized_kwargs = dict(kwargs)
+        cmdb_aliases = {"cm", "cmdb", "cmdb_df", "nw_cmdb", "server_cmdb"}
+        is_aliases = {"isr", "is_df", "is_os", "is_os_df", "inventory_df"}
+        for name, value in list(sanitized_kwargs.items()):
+            if hasattr(value, "columns") and name.lower() in cmdb_aliases | is_aliases:
+                sanitized_kwargs[name] = sanitize_serial_placeholders(value)
+        return tuple(sanitized_args), sanitized_kwargs
+
+    def reconcile_network(self,*args,**kwargs):
+        args, kwargs = self._sanitize_reconciliation_inputs(args, kwargs)
+        return self.engine.reconcile_nw(*args,**kwargs)
+
+    def reconcile_server(self,*args,**kwargs):
+        args, kwargs = self._sanitize_reconciliation_inputs(args, kwargs)
+        return self.engine.reconcile_server(*args,**kwargs)
     def run_hardware_governance(self,*args,**kwargs): return self.engine.run_hardware_governance(*args,**kwargs)
     def generate_bulk_load(self,*args,**kwargs): return self.engine.generate_bulk_load(*args,**kwargs)
     def category_decisions_from_load(self,*args,**kwargs): return self.engine.category_decisions_from_load(*args,**kwargs)
