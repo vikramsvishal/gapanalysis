@@ -8,7 +8,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
 from typing import Any, Callable
-from pathlib import Path\nfrom tempfile import TemporaryDirectory
+from pathlib import Path
+from tempfile import TemporaryDirectory
 
 import pandas as pd
 
