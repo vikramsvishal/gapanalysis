@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import Any
 
 from .legacy_adapter import load_golden
@@ -123,7 +124,7 @@ class GovernanceService:
             load_df = self.engine.read_load_to_is_file(
                 self._record(payload, load_kind).stored_path, domain, progress
             )
-            governance = self.engine.category_decisions_from_load(
+            governance = self.category_decisions_from_load(
                 domain, load_df, self._record(payload, category_kind).stored_path, progress
             )
             include_missing_fqdn = bool(payload.get("include_missing_fqdn", False))
