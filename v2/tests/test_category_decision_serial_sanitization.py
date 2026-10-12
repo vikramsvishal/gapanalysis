@@ -53,3 +53,37 @@ def test_server_category_serial_number_alias_is_sanitized_without_mutating_input
     assert sanitized["serial_number"].tolist() == ["", "SN-123"]
     assert sanitized["description"].tolist() == ["NA", "real description"]
     assert source["serial_number"].tolist() == ["N/A Virtual", "SN-123"]
+
+
+def test_server_category_decisions_sanitize_serial_number_column(tmp_path: Path):
+    category_path = tmp_path / "server_category.xlsx"
+    pd.DataFrame([{
+        "serial_number": "N/A Virtual",
+        "server_opaque_id": "SERVER-CAT-1",
+        "server_lifecycle_status": "Production",
+    }]).to_excel(category_path, index=False)
+    load_df = pd.DataFrame([{
+        "Configuration Item": "server01",
+        "Serial number": "NA",
+        "Manufacturer": "Dell",
+    }])
+
+    class InspectingEngine:
+        def read_tabular(self, path):
+            return pd.read_excel(path)
+
+        def category_decisions_from_load(self, domain, candidates, category_file, *args, **kwargs):
+            assert domain == "server"
+            assert candidates.loc[0, "Serial number"] == ""
+            category = pd.read_excel(category_file, keep_default_na=False)
+            assert category.loc[0, "serial_number"] == ""
+            assert category.loc[0, "server_opaque_id"] == "SERVER-CAT-1"
+            return {"decisions": pd.DataFrame(), "category_load": pd.DataFrame()}
+
+    result = GovernanceService(engine=InspectingEngine()).category_decisions_from_load(
+        "server", load_df, str(category_path)
+    )
+
+    assert "decisions" in result
+    assert load_df.loc[0, "Serial number"] == "NA"
+    assert pd.read_excel(category_path, keep_default_na=False).loc[0, "serial_number"] == "N/A Virtual"
