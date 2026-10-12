@@ -138,3 +138,34 @@ def test_reconciliation_boundary_blanks_serial_placeholders_before_golden_execut
     assert frame.loc[0, "os_parent_serial_number"] == ""
     assert frame.loc[0, "Server Serial Number"] == ""
     assert frame.loc[0, "Other"] == "NA"
+
+@pytest.mark.parametrize("operation", ["reconcile_network", "reconcile_server"])
+def test_direct_reconciliation_entry_points_sanitize_serial_placeholders(operation):
+    import pandas as pd
+    from v2.services import GovernanceService
+
+    observed = {}
+
+    class FakeEngine:
+        def reconcile_nw(self, cm, isr, *_args, **_kwargs):
+            observed["cm"] = cm.copy()
+            observed["isr"] = isr.copy()
+            return "network-result"
+
+        def reconcile_server(self, cm, isr, *_args, **_kwargs):
+            observed["cm"] = cm.copy()
+            observed["isr"] = isr.copy()
+            return ("server-result", None)
+
+    cm = pd.DataFrame({"Serial number": ["N/A virtual"], "Configuration Item": ["SW-01"]})
+    isr = pd.DataFrame({"os_parent_serial_number": ["NA"], "hostname": ["OTHER-HOST"]})
+    service = GovernanceService(engine=FakeEngine())
+
+    result = getattr(service, operation)(cm, isr, object())
+
+    assert result == ("server-result", None) if operation == "reconcile_server" else result == "network-result"
+    assert observed["cm"].loc[0, "Serial number"] == ""
+    assert observed["isr"].loc[0, "os_parent_serial_number"] == ""
+    # Service sanitization is non-destructive to the caller's original evidence.
+    assert cm.loc[0, "Serial number"] == "N/A virtual"
+    assert isr.loc[0, "os_parent_serial_number"] == "NA"
