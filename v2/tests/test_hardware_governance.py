@@ -159,4 +159,4 @@ def test_hardware_governance_sanitizes_serial_placeholders_without_mutating_sour
 
     assert result.engine == "V1.4.1"
     assert pd.read_excel(cmdb_path).loc[0, "Serial number"] == "N/A Virtual"
-    assert pd.read_excel(category_path).loc[0, "network_serial_number"] == "NA"
+    assert pd.read_excel(category_path, keep_default_na=False).loc[0, "network_serial_number"] == "NA"
