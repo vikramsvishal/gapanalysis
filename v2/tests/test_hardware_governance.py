@@ -160,3 +160,33 @@ def test_hardware_governance_sanitizes_serial_placeholders_without_mutating_sour
     assert result.engine == "V1.4.1"
     assert pd.read_excel(cmdb_path).loc[0, "Serial number"] == "N/A Virtual"
     assert pd.read_excel(category_path, keep_default_na=False).loc[0, "network_serial_number"] == "NA"
+
+
+def test_direct_hardware_governance_sanitizes_serial_inputs_without_mutating_sources(tmp_path):
+    import pandas as pd
+    from v2.services import GovernanceService
+
+    cmdb = tmp_path / "cmdb.xlsx"
+    category = tmp_path / "category.xlsx"
+    pd.DataFrame([{"Configuration Item": "sw01", "Serial number": "N/A Virtual"}]).to_excel(cmdb, index=False)
+    pd.DataFrame([{"network_serial_number": "NA"}]).to_excel(category, index=False)
+    observed = {}
+
+    class InspectingEngine:
+        def read_tabular(self, path):
+            return pd.read_excel(path)
+
+        def run_hardware_governance(self, domain, cmdb_path, category_path, catalog_path, outdir, *args, **kwargs):
+            observed["cmdb"] = pd.read_excel(cmdb_path, keep_default_na=False)
+            observed["category"] = pd.read_excel(category_path, keep_default_na=False)
+            return {"ok": True}
+
+    result = GovernanceService(engine=InspectingEngine()).run_hardware_governance(
+        "network", str(cmdb), str(category), str(tmp_path / "catalog.xlsx"), str(tmp_path / "out")
+    )
+
+    assert result == {"ok": True}
+    assert observed["cmdb"].loc[0, "Serial number"] == ""
+    assert observed["category"].loc[0, "network_serial_number"] == ""
+    assert pd.read_excel(cmdb, keep_default_na=False).loc[0, "Serial number"] == "N/A Virtual"
+    assert pd.read_excel(category, keep_default_na=False).loc[0, "network_serial_number"] == "NA"
