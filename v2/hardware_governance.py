@@ -6,9 +6,9 @@ rules are migrated behind this seam only after golden regression coverage exists
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any, Callable
-from pathlib import Path
+from pathlib import Path\nfrom tempfile import TemporaryDirectory
 
 import pandas as pd
 
@@ -17,7 +17,7 @@ from .category_governance import CategoryDependencyGovernance
 from .hardware_decision import HardwareGovernanceDecisionComposer, HardwareGovernanceSignals
 from .hardware_equivalence import v2_decision_projection
 from .legacy_adapter import load_golden
-from .normalization import lifecycle, serial_key
+from .normalization import lifecycle, serial_key, sanitize_serial_placeholders
 
 
 @dataclass(frozen=True)
@@ -95,16 +95,34 @@ class HardwareGovernanceService:
         if request.domain not in self.SUPPORTED_DOMAINS:
             raise ValueError("Hardware Governance requires domain=network or domain=server")
 
-        raw = self.engine.run_hardware_governance(
-            request.domain,
-            request.cmdb_path,
-            request.category_path,
-            request.catalog_path,
-            request.output_dir,
-            progress or (lambda _message, _percent=0: None),
-            write_outputs=request.write_outputs,
-        )
-        shadow = self._shadow_compare(request, raw.get("decisions")) if all(Path(p).is_file() for p in (request.cmdb_path, request.category_path, request.catalog_path)) else {"enabled": False, "reason": "shadow inputs unavailable"}
+        # Sanitize copies of CMDB/category inputs before serial-based identity
+        # checks. Original source files remain untouched for audit/evidence.
+        source_paths = (request.cmdb_path, request.category_path, request.catalog_path)
+        inputs_available = all(Path(path).is_file() for path in source_paths)
+        with TemporaryDirectory(prefix="v2-hw-governance-") as temp_dir:
+            effective_request = request
+            if inputs_available:
+                golden = load_golden()
+                cmdb = sanitize_serial_placeholders(golden.read_tabular(request.cmdb_path))
+                category = sanitize_serial_placeholders(golden.read_tabular(request.category_path))
+                cmdb_path = Path(temp_dir) / Path(request.cmdb_path).name
+                category_path = Path(temp_dir) / Path(request.category_path).name
+                cmdb.to_excel(cmdb_path, index=False)
+                category.to_excel(category_path, index=False)
+                effective_request = replace(
+                    request, cmdb_path=str(cmdb_path), category_path=str(category_path)
+                )
+
+            raw = self.engine.run_hardware_governance(
+                effective_request.domain,
+                effective_request.cmdb_path,
+                effective_request.category_path,
+                effective_request.catalog_path,
+                effective_request.output_dir,
+                progress or (lambda _message, _percent=0: None),
+                write_outputs=effective_request.write_outputs,
+            )
+            shadow = self._shadow_compare(effective_request, raw.get("decisions")) if inputs_available else {"enabled": False, "reason": "shadow inputs unavailable"}
         return HardwareGovernanceResult(
             domain=request.domain,
             decisions=raw.get("decisions"),
