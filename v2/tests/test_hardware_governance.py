@@ -143,7 +143,7 @@ def test_hardware_governance_sanitizes_serial_placeholders_without_mutating_sour
         def run_hardware_governance(self, domain, cmdb, category, catalog, outdir, *args, **kwargs):
             assert domain == "network"
             assert pd.read_excel(cmdb, keep_default_na=False).loc[0, "Serial number"] == ""
-            assert pd.read_excel(category, keep_default_na=False).loc[0, "network_serial_number"] == ""
+            assert observed["category"].loc[0, "network_serial_number"] == ""
             return {
                 "decisions": pd.DataFrame(),
                 "category_load": pd.DataFrame(),
@@ -169,7 +169,7 @@ def test_direct_hardware_governance_sanitizes_serial_inputs_without_mutating_sou
     cmdb = tmp_path / "cmdb.xlsx"
     category = tmp_path / "category.xlsx"
     pd.DataFrame([{"Configuration Item": "sw01", "Serial number": "N/A Virtual"}]).to_excel(cmdb, index=False)
-    pd.DataFrame([{"network_serial_number": "NA"}]).to_excel(category, index=False)
+    pd.DataFrame([{"network_serial_number": "NA", "network_opaque_id": "CAT-1"}]).to_excel(category, index=False)
     observed = {}
 
     class InspectingEngine:
