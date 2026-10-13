@@ -240,3 +240,17 @@ def test_category_governance_ignores_placeholder_serials():
     found = governance.evaluate("network", "SN-REAL-001", category)
     assert found.category_presence_status == "FOUND IN CATEGORY"
     assert found.parent_opaque_id == "CAT-REAL"
+
+
+
+def test_network_reconciliation_still_uses_hostname_when_serials_are_placeholders():
+    cm, isr, cat, fi = _inputs()
+    # This CI exists in IS by its hostname, but neither source has a usable serial.
+    cm.loc[1, "Serial number"] = "N/A Virtual"
+    isr.loc[0, "os_parent_serial_number"] = "NA"
+
+    result = NetworkReconciliationExecutor().execute(cm, isr, cat, fi)
+    row = result.loc[result["Configuration Item"] == "SW-EXISTING"].iloc[0]
+
+    assert row["Present in IS ?"] == "Yes"
+    assert row["Action"] != "Load To IS"
