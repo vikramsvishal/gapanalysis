@@ -76,3 +76,89 @@ def test_resource_bulk_load_sanitizes_candidate_serial_before_final_generator(tm
     original_after_run = pd.read_excel(load.stored_path, keep_default_na=False)
     assert original_after_run.loc[0, "Serial number"] == "N/A Virtual"
     assert original_after_run.loc[0, "network_serial_number"] == "NA"
+
+
+
+def test_finalize_bulk_load_sanitizes_approved_candidate_before_final_package(tmp_path):
+    from types import SimpleNamespace
+
+    resources = ResourceManager(tmp_path / "finalize-resources.json", tmp_path / "finalize-uploads")
+    load_source = pd.DataFrame([
+        {
+            "Configuration Item": "sw01",
+            "Fully qualified domain name": "sw01.nw.wpp.net",
+            "Serial number": "N/A Virtual",
+            "network_serial_number": "NA",
+            "Manufacturer": "Cisco",
+        },
+        {
+            "Configuration Item": "sw02",
+            "Fully qualified domain name": "sw02.nw.wpp.net",
+            "Serial number": "SN-002",
+            "network_serial_number": "SN-002",
+            "Manufacturer": "Cisco",
+        },
+    ])
+    category_source = pd.DataFrame([{
+        "network_serial_number": "NA Virtual",
+        "network_opaque_id": "CAT-1",
+        "network_lifecycle_status": "Production",
+    }])
+    is_os_source = pd.DataFrame([{"Configuration Item": "existing-os"}])
+    template_source = pd.DataFrame([{"Field": "Configuration Item"}])
+
+    load = resources.register_upload("nw_load_to_is", "load-finalize.xlsx", _xlsx_bytes(load_source))
+    is_os = resources.register_upload("is_os", "is-os-finalize.xlsx", _xlsx_bytes(is_os_source))
+    template = resources.register_upload("bulk_template", "template-finalize.xlsx", _xlsx_bytes(template_source))
+    category = resources.register_upload("is_network_category", "category-finalize.xlsx", _xlsx_bytes(category_source))
+    resource_inputs = {
+        "nw_load_to_is": load.resource_id,
+        "is_os": is_os.resource_id,
+        "bulk_template": template.resource_id,
+        "is_network_category": category.resource_id,
+    }
+    observed = {}
+
+    class InspectingEngine:
+        def read_load_to_is_file(self, path, domain, progress=None):
+            assert domain == "network"
+            return pd.read_excel(path)
+
+        def read_tabular(self, path):
+            return pd.read_excel(path)
+
+        def category_decisions_from_load(self, domain, load_df, category_path, *args, **kwargs):
+            assert load_df.loc[0, "Serial number"] == ""
+            assert load_df.loc[0, "network_serial_number"] == ""
+            category_df = pd.read_excel(category_path, keep_default_na=False)
+            assert category_df.loc[0, "network_serial_number"] == ""
+            return {"decisions": pd.DataFrame(), "category_load": pd.DataFrame()}
+
+        def generate_bulk_load(self, load_df, domain, *args, **kwargs):
+            observed["load_df"] = load_df.copy()
+            return [{"path": "final-controlled-load.xlsx"}]
+
+    approval = SimpleNamespace(
+        status="PENDING_REVIEW",
+        domain="network",
+        resource_inputs=resource_inputs,
+        approval_id="APR-TEST",
+    )
+    exception = SimpleNamespace(
+        status="RESOLVED",
+        decision="APPROVE",
+        candidate={"row_index": "0"},
+    )
+
+    result = GovernanceService(engine=InspectingEngine(), resources=resources).finalize_bulk_load(
+        approval, [exception], actor="reviewer"
+    )
+
+    assert result["status"] == "LOAD_PACKAGE_GENERATED"
+    assert result["approved_count"] == 2
+    assert observed["load_df"].loc[0, "Serial number"] == ""
+    assert observed["load_df"].loc[0, "network_serial_number"] == ""
+    assert observed["load_df"].loc[1, "Serial number"] == "SN-002"
+    original_after_run = pd.read_excel(load.stored_path, keep_default_na=False)
+    assert original_after_run.loc[0, "Serial number"] == "N/A Virtual"
+    assert original_after_run.loc[0, "network_serial_number"] == "NA"
