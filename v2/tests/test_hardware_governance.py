@@ -227,3 +227,64 @@ def test_direct_hardware_governance_does_not_join_blank_serials(tmp_path):
         os_reconciliation=reconciliation,
     )
     assert observed["frame"]["Serial number"].tolist() == ["SN-123"]
+
+
+def test_real_golden_engine_never_joins_placeholder_serial_to_blank_candidate(tmp_path):
+    import pandas as pd
+    from v2.services import GovernanceService
+
+    cmdb_path = tmp_path / "cmdb-real.xlsx"
+    category_path = tmp_path / "category-real.xlsx"
+    catalog_path = tmp_path / "catalog-real.xlsx"
+    pd.DataFrame([
+        {
+            "Configuration Item": "sw-placeholder",
+            "Serial number": "N/A Virtual",
+            "Manufacturer": "Cisco",
+            "Model number": "C9300-48P",
+            "Life Cycle Stage": "Operational",
+        },
+        {
+            "Configuration Item": "sw-real",
+            "Serial number": "SN-REAL-123",
+            "Manufacturer": "Cisco",
+            "Model number": "C9300-48P",
+            "Life Cycle Stage": "Operational",
+        },
+    ]).to_excel(cmdb_path, index=False)
+    pd.DataFrame([
+        {
+            "network_serial_number": "SN-REAL-123",
+            "network_opaque_id": "CAT-REAL",
+            "network_lifecycle_status": "Production",
+            "network_manufacturer": "Cisco",
+            "network_hardware_type": "Switch",
+            "network_hardware_model": "C9300-48P",
+            "network_subcategory": "Access Switch",
+        },
+    ]).to_excel(category_path, index=False)
+    pd.DataFrame([{
+        "manufacturer": "Cisco",
+        "hardware_type": "Switch",
+        "hardware_model": "C9300-48P",
+        "subcategory": "Access Switch",
+        "opaque_id": "HW-REAL",
+    }]).to_excel(catalog_path, index=False)
+
+    reconciliation = pd.DataFrame([
+        {"Configuration Item": "sw-placeholder", "Serial number": "N/A Virtual", "Action": "Load To IS"},
+        {"Configuration Item": "sw-blank", "Serial number": "", "Action": "Load To IS"},
+        {"Configuration Item": "sw-real", "Serial number": "SN-REAL-123", "Action": "Load To IS"},
+    ])
+    result = GovernanceService().run_hardware_governance(
+        "network", str(cmdb_path), str(category_path), str(catalog_path),
+        str(tmp_path), lambda *_: None,
+        os_reconciliation=reconciliation, write_outputs=False,
+    )
+    decisions = result["decisions"].set_index("CMDB Hostname")
+
+    assert decisions.loc["sw-placeholder", "Reconciliation Action"] == ""
+    assert decisions.loc["sw-placeholder", "Recommended Action"] == "NO LOAD ACTION"
+    assert decisions.loc["sw-real", "Reconciliation Action"] == "Load To IS"
+    assert decisions.loc["sw-real", "Recommended Action"] == "LOAD OS ONLY"
+    assert reconciliation["Serial number"].tolist() == ["N/A Virtual", "", "SN-REAL-123"]
