@@ -252,5 +252,5 @@ def test_network_reconciliation_still_uses_hostname_when_serials_are_placeholder
     result = NetworkReconciliationExecutor().execute(cm, isr, cat, fi)
     row = result.loc[result["Configuration Item"] == "SW-EXISTING"].iloc[0]
 
-    assert row["Present in IS ?"] == "Yes"
+    assert row["Present in IS ?"] == "Yes - Hostname Match"
     assert row["Action"] != "Load To IS"
