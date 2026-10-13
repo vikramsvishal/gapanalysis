@@ -190,3 +190,40 @@ def test_direct_hardware_governance_sanitizes_serial_inputs_without_mutating_sou
     assert observed["category"].loc[0, "network_serial_number"] == ""
     assert pd.read_excel(cmdb, keep_default_na=False).loc[0, "Serial number"] == "N/A Virtual"
     assert pd.read_excel(category, keep_default_na=False).loc[0, "network_serial_number"] == "NA"
+
+
+def test_direct_hardware_governance_does_not_join_blank_serials(tmp_path):
+    import pandas as pd
+    from v2.services import GovernanceService
+
+    reconciliation = pd.DataFrame([
+        {"Configuration Item": "sw-placeholder", "Serial number": "N/A Virtual", "Action": "Load To IS"},
+        {"Configuration Item": "sw-blank", "Serial number": "", "Action": "Load To IS"},
+        {"Configuration Item": "sw-real", "Serial number": "SN-123", "Action": "Load To IS"},
+    ])
+    observed = {}
+
+    class InspectingEngine:
+        def run_hardware_governance(self, *args, **kwargs):
+            frame = args[6] if len(args) > 6 else kwargs["os_reconciliation"]
+            observed["frame"] = frame.copy()
+            return {"ok": True}
+
+    service = GovernanceService(engine=InspectingEngine())
+    result = service.run_hardware_governance(
+        "network", "missing-cmdb.xlsx", "missing-category.xlsx",
+        "missing-catalog.xlsx", str(tmp_path), lambda *_: None,
+        reconciliation, "missing-is-os.xlsx", False,
+    )
+
+    assert result == {"ok": True}
+    assert observed["frame"]["Serial number"].tolist() == ["SN-123"]
+    assert reconciliation["Serial number"].tolist() == ["N/A Virtual", "", "SN-123"]
+
+    # Keyword invocation receives the same fail-closed protection.
+    service.run_hardware_governance(
+        "network", "missing-cmdb.xlsx", "missing-category.xlsx",
+        "missing-catalog.xlsx", str(tmp_path), lambda *_: None,
+        os_reconciliation=reconciliation,
+    )
+    assert observed["frame"]["Serial number"].tolist() == ["SN-123"]
