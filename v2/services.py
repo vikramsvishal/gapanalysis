@@ -9,7 +9,7 @@ from .legacy_adapter import load_golden
 from .resources import ResourceManager
 from .approvals import candidate_id
 from .hardware_governance import HardwareGovernanceRequest, HardwareGovernanceService
-from .normalization import sanitize_serial_placeholders
+from .normalization import hkey, serial_key, sanitize_serial_placeholders
 
 
 class GovernanceService:
@@ -339,12 +339,29 @@ class GovernanceService:
             for key in ("cmdb_path", "cmdb", "category_path", "is_category_path", "is_os_path"):
                 if key in keyword:
                     keyword[key] = safe_path(keyword[key], key)
-            for index in (6,):
-                if index < len(positional) and hasattr(positional[index], "columns"):
-                    positional[index] = sanitize_serial_placeholders(positional[index])
+            def safe_reconciliation_frame(frame):
+                sanitized = sanitize_serial_placeholders(frame)
+                serial_aliases = {
+                    hkey(alias) for alias in (
+                        "Serial number", "serial_number", "os_parent_serial_number",
+                        "server_serial_number", "network_serial_number",
+                    )
+                }
+                serial_col = next(
+                    (column for column in sanitized.columns if hkey(column) in serial_aliases),
+                    None,
+                )
+                if serial_col is None:
+                    return sanitized
+                # The golden join is serial-only. Blank-to-blank is not identity;
+                # remove rows without a usable serial rather than allowing false joins.
+                return sanitized.loc[sanitized[serial_col].map(serial_key).ne("")].copy()
+
+            if len(positional) > 6 and hasattr(positional[6], "columns"):
+                positional[6] = safe_reconciliation_frame(positional[6])
             for key in ("os_reconciliation", "reconciliation_df"):
                 if hasattr(keyword.get(key), "columns"):
-                    keyword[key] = sanitize_serial_placeholders(keyword[key])
+                    keyword[key] = safe_reconciliation_frame(keyword[key])
             return self.engine.run_hardware_governance(*positional, **keyword)
     def generate_bulk_load(self, *args, **kwargs):
         """Protect direct load generation from placeholder serials as well."""
