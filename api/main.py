@@ -1,0 +1,488 @@
+""""FastAPI boundary for the local CMDB & IS Governance edition.
+
+The API owns transport concerns only. Governance behavior remains behind
+ApplicationService and the V1.4.1 compatibility seam until extracted safely.
+"""
+from __future__ import annotations
+
+from typing import Any
+
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+
+from v2.application import ApplicationService
+
+app = FastAPI(
+    title="Enterprise Reconciliation & Recommendation Platform",
+    version="2.0.0-alpha.2",
+    description="Local enterprise API for governed CMDB and IS reconciliation.",
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+_service = ApplicationService()
+
+APPLICATIONS = [
+    {
+        "id": "CMDB_IS_GOVERNANCE",
+        "name": "CMDB & IS Governance",
+        "route": "/cmdb-governance",
+        "status": "ACTIVE",
+        "description": "Reconcile CMDB and Inventory Services data and govern controlled load candidates.",
+    },
+    {
+        "id": "INFRA_GAP_ANALYSIS",
+        "name": "Infrastructure Gap Analysis",
+        "route": "/infrastructure-gap-analysis",
+        "status": "DEVELOPMENT",
+        "description": "Correlate infrastructure-tool evidence with CMDB and recommend remediation.",
+    },
+    {
+        "id": "QIR",
+        "name": "Quarterly Inventory Review",
+        "route": "/qir",
+        "status": "DEVELOPMENT",
+        "description": "Run governed quarterly inventory tests, evidence collection and sign-off.",
+    },
+    {
+        "id": "GOVERNANCE_ANALYTICS",
+        "name": "Governance Analytics",
+        "route": "/governance-analytics",
+        "status": "DEVELOPMENT",
+        "description": "Enterprise governance metrics and trend analytics.",
+    },
+]
+
+OPERATIONS = [
+    {
+        "id": "NW_RECONCILIATION",
+        "name": "Network Reconciliation",
+        "capability": "reconcile_network",
+        "status": "ACTIVE",
+        "description": "Compare network CMDB records against current IS inventory.",
+    },
+    {
+        "id": "SERVER_RECONCILIATION",
+        "name": "Server Reconciliation",
+        "capability": "reconcile_server",
+        "status": "ACTIVE",
+        "description": "Identify server inventory gaps and required IS updates.",
+    },
+    {
+        "id": "HARDWARE_GOVERNANCE",
+        "name": "Hardware Governance",
+        "capability": "run_hardware_governance",
+        "status": "ACTIVE",
+        "description": "Resolve physical devices against the authoritative IS hardware catalog.",
+    },
+    {
+        "id": "OS_BULK_LOAD",
+        "name": "OS Bulk Governance",
+        "capability": "generate_bulk_load",
+        "status": "ACTIVE",
+        "description": "Validate operating-system candidates before controlled load generation.",
+    },
+]
+
+
+@app.get("/api/health")
+def health() -> dict[str, Any]:
+    return _service.health()
+
+
+@app.get("/api/applications")
+def applications() -> dict[str, Any]:
+    return {"items": APPLICATIONS}
+
+
+@app.get("/api/governance/operations")
+def operations() -> dict[str, Any]:
+    return {"items": OPERATIONS}
+
+
+@app.get("/api/agents")
+def agents() -> dict[str, Any]:
+    return {"items": list(_service.agents.names())}
+
+
+@app.get("/api/resources/types")
+def resource_types() -> dict[str, Any]:
+    return {"items": _service.governance.resources.public_catalog()}
+
+
+@app.get("/api/resources")
+def resources(kind: str | None = None) -> dict[str, Any]:
+    return {"items": [item.public() for item in _service.governance.resources.list(kind)]}
+
+
+@app.post("/api/resources/upload")
+async def upload_resource(kind: str = Form(...), file: UploadFile = File(...)) -> dict[str, Any]:
+    try:
+        content = await file.read()
+        record = _service.governance.resources.register_upload(kind, file.filename or "uploaded-file", content)
+        _service.audit.append("RESOURCE", "local-user", "RESOURCE", record.resource_id, "UPLOADED", {"kind": kind, "file_name": record.file_name, "sha256": record.sha256, "size": record.size})
+        return record.public()
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.post("/api/governance/preflight")
+def governance_preflight(request: dict[str, Any]) -> dict[str, Any]:
+    operation = request.get("operation")
+    if not operation:
+        raise HTTPException(status_code=400, detail="operation is required")
+    payload = request.get("payload") or {}
+    if operation == "generate_bulk_load":
+        domain = payload.get("domain")
+        if domain not in {"network", "server"}:
+            raise HTTPException(status_code=400, detail="domain must be network or server")
+        return _service.governance.bulk_preflight(domain, payload)
+    return _service.governance.preflight(operation, payload)
+
+
+@app.get("/api/version")
+def version() -> dict[str, str]:
+    return {
+        "application": _service.version,
+        "golden_engine": _service.golden_version,
+    }
+
+
+@app.post("/api/jobs")
+def create_job(request: dict[str, Any]) -> dict[str, Any]:
+    operation = request.get("operation")
+    if not operation:
+        raise HTTPException(status_code=400, detail="operation is required")
+    payload = request.get("payload") or {}
+    actor = request.get("actor") or "local-user"
+    if operation in {"reconcile_network", "reconcile_server", "run_hardware_governance", "generate_bulk_load"}:
+        if not payload.get("resources"):
+            raise HTTPException(
+                status_code=409,
+                detail={"message": "Required input resources must be loaded before starting this operation"},
+            )
+        check = _service.governance.preflight(operation, payload)
+        if not check["ready"]:
+            raise HTTPException(
+                status_code=409,
+                detail={"message": "Required input files are missing", "missing": check["missing"]},
+            )
+    job = _service.start_job(operation, payload, actor)
+    return job.public()
+
+
+@app.get("/api/jobs")
+def list_jobs() -> dict[str, Any]:
+    return {"items": [job.public() for job in _service.list_jobs()]}
+
+
+@app.get("/api/audit")
+def list_audit() -> dict[str, Any]:
+    return {"items": [item.public() for item in _service.list_audit()]}
+
+
+@app.get("/api/audit/{event_id}")
+def get_audit(event_id: str) -> dict[str, Any]:
+    item = _service.get_audit(event_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="audit event not found")
+    return item.public()
+
+
+@app.get("/api/audit/entity/{entity_type}/{entity_id}")
+def entity_audit(entity_type: str, entity_id: str) -> dict[str, Any]:
+    return {"items": [item.public() for item in _service.entity_audit(entity_type, entity_id)]}
+
+
+@app.get("/api/exceptions")
+def list_exceptions() -> dict[str, Any]:
+    return {"items": [item.public() for item in _service.list_exceptions()]}
+
+
+@app.get("/api/exceptions/{exception_id}")
+def get_exception(exception_id: str) -> dict[str, Any]:
+    item = _service.get_exception(exception_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="exception not found")
+    return item.public()
+
+
+@app.get("/api/results/{result_id}/exceptions")
+def result_exceptions(result_id: str) -> dict[str, Any]:
+    result = _service.get_result(result_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail="result not found")
+    return {"items": [item.public() for item in _service.result_exceptions(result_id)]}
+
+
+@app.post("/api/exceptions/{exception_id}/resolve")
+def resolve_exception(exception_id: str, request: dict[str, Any]) -> dict[str, Any]:
+    actor = request.get("actor") or "local-user"
+    resolution = request.get("resolution")
+    decision = request.get("decision") or "APPROVE"
+    if not resolution:
+        raise HTTPException(status_code=400, detail="resolution is required")
+    try:
+        return _service.resolve_exception(exception_id, actor, resolution, decision).public()
+    except KeyError:
+        raise HTTPException(status_code=404, detail="exception not found")
+
+
+@app.get("/api/approvals")
+def list_approvals() -> dict[str, Any]:
+    return {"items": [item.public() for item in _service.list_approvals()]}
+
+
+@app.get("/api/approvals/{approval_id}")
+def get_approval(approval_id: str) -> dict[str, Any]:
+    item = _service.get_approval(approval_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="approval package not found")
+    return item.public()
+
+
+@app.get("/api/results/{result_id}/approval")
+def result_approval(result_id: str) -> dict[str, Any]:
+    result = _service.get_result(result_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail="result not found")
+    item = _service.result_approval(result_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="approval package not found for result")
+    return item.public()
+
+
+@app.post("/api/approvals/{approval_id}/finalize")
+def finalize_approval(approval_id: str, request: dict[str, Any]) -> dict[str, Any]:
+    actor = request.get("actor") or "local-user"
+    try:
+        return _service.finalize_bulk_load(approval_id, actor).public()
+    except KeyError:
+        raise HTTPException(status_code=404, detail="approval package not found")
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+
+
+@app.get("/api/evidence")
+def list_evidence() -> dict[str, Any]:
+    return {"items": [item.public() for item in _service.list_evidence()]}
+
+
+@app.get("/api/evidence/{evidence_id}")
+def get_evidence(evidence_id: str) -> dict[str, Any]:
+    item = _service.get_evidence(evidence_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="evidence not found")
+    return item.public()
+
+
+@app.get("/api/results/{result_id}/evidence")
+def result_evidence(result_id: str) -> dict[str, Any]:
+    result = _service.get_result(result_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail="result not found")
+    return {"items": [item.public() for item in _service.result_evidence(result_id)]}
+
+
+@app.get("/api/results")
+def list_results() -> dict[str, Any]:
+    return {"items": [result.public() for result in _service.list_results()]}
+
+
+@app.get("/api/results/{result_id}/shadow/migration")
+def result_shadow_migration(result_id: str) -> dict[str, Any]:
+    result = _service.get_result(result_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail="result not found")
+    return _service.get_shadow_migration(result_id)
+
+
+class ShadowClassificationRequest(BaseModel):
+    row_index: int
+    field: str
+    status: str
+    rationale: str = ""
+    owner: str = ""
+
+
+@app.post("/api/results/{result_id}/shadow/migration")
+def classify_shadow(result_id: str, request: ShadowClassificationRequest) -> dict[str, Any]:
+    result = _service.get_result(result_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail="result not found")
+    try:
+        return _service.classify_shadow(
+            result_id, request.row_index, request.field, request.status,
+            request.rationale, request.owner
+        ).public()
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+
+
+class MigrationEvidenceRequest(BaseModel):
+    scope: str = "ALL"
+    capability: str | None = None
+    result_ids: list[str] = []
+    actor: str = "local-user"
+
+
+@app.get("/api/migration-evidence")
+def list_migration_evidence() -> dict[str, Any]:
+    return {"items": [item.public() for item in _service.list_migration_evidence()]}
+
+
+@app.post("/api/migration-evidence")
+def generate_migration_evidence(request: MigrationEvidenceRequest) -> dict[str, Any]:
+    try:
+        item = _service.generate_migration_evidence(
+            scope=request.scope,
+            capability=request.capability,
+            result_ids=request.result_ids,
+            actor=request.actor,
+        )
+        return item.public()
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+
+
+class MigrationDecisionRequest(BaseModel):
+    decision: str
+    actor: str = "local-user"
+    rationale: str = ""
+
+
+class AuthorityActivationRequest(BaseModel):
+    decision_id: str
+    actor: str = "local-user"
+    rationale: str = ""
+
+
+class AuthorityRollbackRequest(BaseModel):
+    actor: str = "local-user"
+    rationale: str = ""
+
+
+@app.get("/api/authority")
+def list_authority() -> dict[str, Any]:
+    return {"items": [x.public() for x in _service.list_authority()]}
+
+
+@app.get("/api/authority/{capability}")
+def get_authority(capability: str) -> dict[str, Any]:
+    try:
+        return _service.get_authority(capability).public()
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.post("/api/authority/{capability}/activate")
+def activate_authority(capability: str, request: AuthorityActivationRequest) -> dict[str, Any]:
+    try:
+        return _service.activate_authority(capability, request.decision_id, request.actor, request.rationale).public()
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+
+
+@app.post("/api/authority/{capability}/rollback")
+def rollback_authority(capability: str, request: AuthorityRollbackRequest) -> dict[str, Any]:
+    try:
+        return _service.rollback_authority(capability, request.actor, request.rationale).public()
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.get("/api/migration-decisions")
+def list_migration_decisions() -> dict[str, Any]:
+    return {"items": [x.public() for x in _service.list_migration_decisions()]}
+
+
+@app.get("/api/migration-evidence/{package_id}/decisions")
+def migration_package_decisions(package_id: str) -> dict[str, Any]:
+    item = _service.get_migration_evidence(package_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="migration evidence pack not found")
+    return {"items": [x.public() for x in _service.migration_package_decisions(package_id)]}
+
+
+@app.post("/api/migration-evidence/{package_id}/decisions")
+def record_migration_decision(package_id: str, request: MigrationDecisionRequest) -> dict[str, Any]:
+    try:
+        return _service.record_migration_decision(package_id, request.decision, request.actor, request.rationale).public()
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.get("/api/migration-evidence/{package_id}")
+def get_migration_evidence(package_id: str) -> dict[str, Any]:
+    item = _service.get_migration_evidence(package_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="migration evidence pack not found")
+    return item.public()
+
+
+@app.get("/api/migration-evidence/{package_id}/manifest")
+def migration_evidence_manifest(package_id: str) -> dict[str, Any]:
+    item = _service.get_migration_evidence(package_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="migration evidence pack not found")
+    manifest = _service.migration_evidence_manifest(package_id)
+    return {"package": item.public(), "manifest": manifest}
+
+
+@app.get("/api/migration-readiness")
+def capability_migration_readiness() -> dict[str, Any]:
+    return _service.get_capability_migration_readiness()
+
+
+@app.get("/api/results/{result_id}/migration-readiness")
+def migration_readiness(result_id: str) -> dict[str, Any]:
+    result = _service.get_result(result_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail="result not found")
+    return _service.get_migration_readiness(result_id)
+
+
+@app.get("/api/results/{result_id}/shadow")
+def result_shadow(result_id: str) -> dict[str, Any]:
+    result = _service.get_result(result_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail="result not found")
+    shadow = _service.get_shadow(result_id)
+    if shadow is None:
+        raise HTTPException(status_code=404, detail="shadow analysis not available for result")
+    return shadow
+
+
+@app.get("/api/results/{result_id}")
+def get_result(result_id: str) -> dict[str, Any]:
+    result = _service.get_result(result_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail="result not found")
+    return result.public()
+
+
+@app.get("/api/jobs/{job_id}/result")
+def get_job_result(job_id: str) -> dict[str, Any]:
+    result = _service.get_job_result(job_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail="result not found for job")
+    return result.public()
+
+
+@app.get("/api/jobs/{job_id}")
+def get_job(job_id: str) -> dict[str, Any]:
+    job = _service.get_job(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="job not found")
+    return job.public()
