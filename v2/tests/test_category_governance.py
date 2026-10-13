@@ -78,3 +78,27 @@ def test_non_operational_category_does_not_satisfy_parent_dependency(gov):
 def test_invalid_domain_is_rejected(gov):
     with pytest.raises(ValueError):
         gov.evaluate("storage", "N-001", category())
+
+
+def test_placeholder_serials_never_establish_category_presence():
+    from v2.normalization import lifecycle as normalized_lifecycle, serial_key as normalized_serial_key
+
+    gov = CategoryDependencyGovernance(normalized_lifecycle, normalized_serial_key)
+    data = pd.DataFrame([
+        {
+            "network_serial_number": "N/A Virtual",
+            "network_opaque_id": "PLACEHOLDER-CATEGORY",
+            "network_lifecycle_status": "Production",
+        },
+        {
+            "network_serial_number": "SN-REAL-123",
+            "network_opaque_id": "REAL-CATEGORY",
+            "network_lifecycle_status": "Production",
+        },
+    ])
+
+    decision = gov.evaluate("network", "NA", data)
+
+    assert decision.category_presence_status == "MISSING FROM CATEGORY"
+    assert decision.parent_opaque_id == ""
+    assert decision.recommended_action == "LOAD CATEGORY AND OS"
